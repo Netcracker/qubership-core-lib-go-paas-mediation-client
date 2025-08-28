@@ -1,24 +1,25 @@
 module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
-go 1.23.4
+go 1.24.0
+
+toolchain go1.24.6
 
 require (
 	github.com/cert-manager/cert-manager v1.17.1
 	github.com/dgraph-io/ristretto/v2 v2.1.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/knadh/koanf/providers/confmap v0.1.0
 	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.0.1
 	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.0.1
 	github.com/netcracker/qubership-core-lib-go/v3 v3.0.1
-	github.com/openshift/api v0.0.0-20250325155304-0f14a211af33
+	github.com/openshift/api v0.0.0-20250826155724-4a165b214722
 	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/mod v0.24.0
-	golang.org/x/net v0.37.0
-	k8s.io/api v0.32.3
-	k8s.io/apimachinery v0.32.3
+	golang.org/x/net v0.38.0
+	k8s.io/api v0.33.2
+	k8s.io/apimachinery v0.33.2
 	k8s.io/client-go v0.32.3
 )
 
@@ -42,8 +43,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/consul/api v1.32.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -87,17 +87,18 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	golang.org/x/time v0.8.0 // indirect
-	google.golang.org/protobuf v1.36.0 // indirect
+	golang.org/x/time v0.9.0 // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.32.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
+	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
 	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
+	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
