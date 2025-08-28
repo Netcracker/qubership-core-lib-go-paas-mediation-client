@@ -8,9 +8,9 @@ require (
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
 	github.com/knadh/koanf/providers/confmap v0.1.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.0.0-20250410105207-ba4bfd983c8d
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.0.0-20250508142012-e92225d73d9f
-	github.com/netcracker/qubership-core-lib-go/v3 v3.0.0-20250508122204-5cb3c4abfd2b
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.0.1
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.0.1
+	github.com/netcracker/qubership-core-lib-go/v3 v3.0.1
 	github.com/openshift/api v0.0.0-20250325155304-0f14a211af33
 	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/smarty/assertions v1.16.0
