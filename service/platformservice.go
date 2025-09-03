@@ -29,6 +29,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
 var (
@@ -246,7 +247,12 @@ func initLocalClient() (*backend.KubernetesApi, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient}, nil
+	// create the gateway api client
+	gatewayApiClient, err := gatewayclient.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient, GatewayInterface: gatewayApiClient}, nil
 }
 
 func initInClusterClient() (*backend.KubernetesApi, error) {
@@ -266,7 +272,12 @@ func initInClusterClient() (*backend.KubernetesApi, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient}, nil
+	// create the gateway api client
+	gatewayApiClient, err := gatewayclient.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient, GatewayInterface: gatewayApiClient}, nil
 }
 
 func initCaches(caches map[cache.CacheName]struct{}, numItems int64, maxSizeInBytes int64, maxItemSizeInBytes int64, ttl time.Duration) (*cache.ResourcesCache, error) {

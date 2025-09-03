@@ -54,6 +54,7 @@ import (
 	rbacv1beta1 "k8s.io/client-go/kubernetes/typed/rbac/v1beta1"
 	resourcev1alpha3 "k8s.io/client-go/kubernetes/typed/resource/v1alpha3"
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta1"
+	"k8s.io/client-go/kubernetes/typed/resource/v1beta2"
 	schedulingv1 "k8s.io/client-go/kubernetes/typed/scheduling/v1"
 	schedulingv1alpha1 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha1"
 	schedulingv1beta1 "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1"
@@ -68,6 +69,10 @@ type KubeClientset struct {
 	testing.Fake
 	discovery *fakediscovery.FakeDiscovery
 	tracker   testing.ObjectTracker
+}
+
+func (c *KubeClientset) ResourceV1beta2() v1beta2.ResourceV1beta2Interface {
+	panic("implement me")
 }
 
 func (c *KubeClientset) FlowcontrolV1() v1.FlowcontrolV1Interface {
