@@ -186,6 +186,14 @@ func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaF
 	}
 }
 
+func (kube *Kubernetes) WatchGatewayHTTPRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
+	return kube.WatchHandlers.HTTPRouteV1.Watch(ctx, namespace, metaFilter)
+}
+
+func (kube *Kubernetes) WatchGatewayGRPCRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
+	return kube.WatchHandlers.GRPCRouteV1.Watch(ctx, namespace, metaFilter)
+}
+
 func (kube *Kubernetes) modifyIngressClassForBG2(ingress any) {
 	if kube.BG2Enabled == nil || !kube.BG2Enabled() {
 		return

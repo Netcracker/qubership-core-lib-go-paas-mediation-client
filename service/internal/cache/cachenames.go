@@ -9,3 +9,5 @@ const NamespaceCache CacheName = "NamespaceCache"
 const RouteCache CacheName = "RouteCache" //todo rename to Ingresses
 const SecretCache CacheName = "SecretCache"
 const ServiceCache CacheName = "ServiceCache"
+const HttpRouteCache CacheName = "HttpRouteCache"
+const GrpcRouteCache CacheName = "GrpcRouteCache"
