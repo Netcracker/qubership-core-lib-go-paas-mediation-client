@@ -355,3 +355,43 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NotNil(kubernetes)
 	assertions.NotNil(kubernetes.Cache)
 }
+
+func TestHasKindGatewayApi_HTTPRouteSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
+		},
+	}
+	r.True(hasKindGatewayApi("HTTPRoute", fakeDisc))
+}
+
+func TestHasKindGatewayApi_GRPCRouteSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
+		},
+	}
+	r.True(hasKindGatewayApi("GRPCRoute", fakeDisc))
+}
+
+func TestHasKindGatewayApi_KindNotSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "SomeOtherKind"}},
+		},
+	}
+	r.False(hasKindGatewayApi("GRPCRoute", fakeDisc))
+	r.False(hasKindGatewayApi("HTTPRoute", fakeDisc))
+}
