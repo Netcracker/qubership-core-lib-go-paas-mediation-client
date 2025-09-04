@@ -1,13 +1,14 @@
 package entity
 
 import (
+	"testing"
+
 	v1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/extensions/v1beta1"
 	networkingV1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"testing"
 )
 
 const (
