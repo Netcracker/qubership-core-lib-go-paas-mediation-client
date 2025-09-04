@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
 
 const (
@@ -354,6 +355,42 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NoError(err)
 	assertions.NotNil(kubernetes)
 	assertions.NotNil(kubernetes.Cache)
+}
+
+func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
+	assertions := require.New(t)
+	k8sClient := fake.NewClientset()
+	// advertise gateway kinds in discovery
+	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{{
+		GroupVersion: "gateway.networking.k8s.io/v1",
+		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
+	}}
+	// gateway client (fake)
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kube, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.HTTPRouteV1)
+}
+
+func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
+	assertions := require.New(t)
+	k8sClient := fake.NewClientset()
+	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{{
+		GroupVersion: "gateway.networking.k8s.io/v1",
+		APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
+	}}
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kube, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.GRPCRouteV1)
 }
 
 func TestHasKindGatewayApi_HTTPRouteSupported(t *testing.T) {
