@@ -4,10 +4,9 @@ go 1.23.4
 
 require (
 	github.com/cert-manager/cert-manager v1.17.1
-	github.com/dgraph-io/ristretto/v2 v2.1.0
+	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/knadh/koanf/providers/confmap v0.1.0
 	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.0.1
 	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.0.1
 	github.com/netcracker/qubership-core-lib-go/v3 v3.0.1
@@ -84,7 +83,7 @@ require (
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
