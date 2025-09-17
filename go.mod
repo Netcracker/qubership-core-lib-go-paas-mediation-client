@@ -18,7 +18,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/mod v0.24.0
 	golang.org/x/net v0.38.0
-	k8s.io/api v0.32.3
+	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
 )
