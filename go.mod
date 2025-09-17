@@ -2,7 +2,7 @@ module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
 go 1.23.8
 
-toolchain go1.24.2
+toolchain go1.25.1
 
 require (
 	github.com/cert-manager/cert-manager v1.18.2
@@ -40,7 +40,6 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
