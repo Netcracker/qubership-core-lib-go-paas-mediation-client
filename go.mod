@@ -1,6 +1,6 @@
 module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
-go 1.23.8
+go 1.24.0
 
 toolchain go1.24.2
 
@@ -16,8 +16,8 @@ require (
 	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/mod v0.24.0
-	golang.org/x/net v0.38.0
+	golang.org/x/mod v0.27.0
+	golang.org/x/net v0.44.0
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
@@ -40,7 +40,6 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
@@ -85,10 +84,10 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/protobuf v1.36.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
