@@ -2,7 +2,7 @@ module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
 go 1.23.8
 
-toolchain go1.24.2
+toolchain go1.25.1
 
 require (
 	github.com/cert-manager/cert-manager v1.18.2
@@ -16,11 +16,11 @@ require (
 	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/mod v0.24.0
-	golang.org/x/net v0.38.0
-	k8s.io/api v0.32.3
-	k8s.io/apimachinery v0.32.3
-	k8s.io/client-go v0.32.3
+	golang.org/x/mod v0.28.0
+	golang.org/x/net v0.44.0
+	k8s.io/api v0.34.1
+	k8s.io/apimachinery v0.34.1
+	k8s.io/client-go v0.34.1
 )
 
 require (
