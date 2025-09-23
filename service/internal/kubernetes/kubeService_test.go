@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
 
@@ -391,6 +392,59 @@ func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
 		Build()
 	assertions.NoError(err)
 	assertions.NotNil(kube.WatchHandlers.GRPCRouteV1)
+}
+
+func Test_GetHttpRouteList_success(t *testing.T) {
+	r := require.New(t)
+	ns := testNamespace1
+	path := "/api"
+	var port gatewayv1.PortNumber = 8080
+	hr1 := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "hr-1", Namespace: ns, ResourceVersion: "1"},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Hostnames: []gatewayv1.Hostname{"example.com"},
+			Rules: []gatewayv1.HTTPRouteRule{{
+				Matches:     []gatewayv1.HTTPRouteMatch{{Path: &gatewayv1.HTTPPathMatch{Value: &path}}},
+				BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-a"), Port: &port}}}},
+			}},
+		},
+	}
+	hr2 := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "hr-2", Namespace: ns, ResourceVersion: "2"},
+		Spec:       gatewayv1.HTTPRouteSpec{Hostnames: []gatewayv1.Hostname{"example.org"}, Rules: []gatewayv1.HTTPRouteRule{{BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-b")}}}}}}},
+	}
+
+	gwClient := gatewayclientfake.NewSimpleClientset(hr1, hr2)
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+		Cache: cache.NewTestResourcesCache(cache.HttpRouteCache)}
+
+	list, err := kube.GetHttpRouteList(context.Background(), ns, filter.Meta{})
+	r.NoError(err)
+	r.Equal(2, len(list))
+	r.Equal(*entity.RouteFromHTTPRoute(hr1), list[0])
+}
+
+func Test_GetGrpcRouteList_success(t *testing.T) {
+	r := require.New(t)
+	ns := testNamespace1
+	var port gatewayv1.PortNumber = 9090
+	gr1 := &gatewayv1.GRPCRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "gr-1", Namespace: ns, ResourceVersion: "1"},
+		Spec:       gatewayv1.GRPCRouteSpec{Hostnames: []gatewayv1.Hostname{"grpc.example.com"}, Rules: []gatewayv1.GRPCRouteRule{{BackendRefs: []gatewayv1.GRPCBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-g"), Port: &port}}}}}}},
+	}
+	gr2 := &gatewayv1.GRPCRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "gr-2", Namespace: ns, ResourceVersion: "2"},
+		Spec:       gatewayv1.GRPCRouteSpec{Hostnames: []gatewayv1.Hostname{"grpc2.example.com"}, Rules: []gatewayv1.GRPCRouteRule{{BackendRefs: []gatewayv1.GRPCBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-h")}}}}}}},
+	}
+
+	gwClient := gatewayclientfake.NewSimpleClientset(gr1, gr2)
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+		Cache: cache.NewTestResourcesCache(cache.GrpcRouteCache)}
+
+	list, err := kube.GetGrpcRouteList(context.Background(), ns, filter.Meta{})
+	r.NoError(err)
+	r.Equal(2, len(list))
+	r.Equal(*entity.RouteFromGRPCRoute(gr1), list[0])
 }
 
 func TestHasKindGatewayApi_HTTPRouteSupported(t *testing.T) {

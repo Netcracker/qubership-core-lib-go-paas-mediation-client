@@ -54,7 +54,6 @@ import (
 	rbacv1beta1 "k8s.io/client-go/kubernetes/typed/rbac/v1beta1"
 	resourcev1alpha3 "k8s.io/client-go/kubernetes/typed/resource/v1alpha3"
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta1"
-	"k8s.io/client-go/kubernetes/typed/resource/v1beta2"
 	schedulingv1 "k8s.io/client-go/kubernetes/typed/scheduling/v1"
 	schedulingv1alpha1 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha1"
 	schedulingv1beta1 "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1"
@@ -71,7 +70,7 @@ type KubeClientset struct {
 	tracker   testing.ObjectTracker
 }
 
-func (c *KubeClientset) ResourceV1beta2() v1beta2.ResourceV1beta2Interface {
+func (c *KubeClientset) NetworkingV1alpha1() v1alpha1.NetworkingV1alpha1Interface {
 	panic("implement me")
 }
 
@@ -104,10 +103,6 @@ func (c *KubeClientset) CertificatesV1alpha1() certificatesv1alpha1.Certificates
 }
 
 var _ clientset.Interface = &KubeClientset{}
-
-func (c *KubeClientset) NetworkingV1alpha1() v1alpha1.NetworkingV1alpha1Interface {
-	panic("not implemented")
-}
 
 func (c *KubeClientset) Tracker() testing.ObjectTracker {
 	return c.tracker

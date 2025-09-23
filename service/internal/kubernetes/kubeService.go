@@ -23,6 +23,7 @@ import (
 	extensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	networkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1_client "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 const (
@@ -278,6 +279,10 @@ func (kube *Kubernetes) getAppsV1Client() appsv1_client.AppsV1Interface {
 
 func (kube *Kubernetes) getCertmanagerV1Client() certmanagerv1.CertmanagerV1Interface {
 	return kube.client.CertmanagerV1()
+}
+
+func (kube *Kubernetes) getGatewayV1Client() gatewayv1_client.GatewayV1Interface {
+	return kube.client.GatewayV1()
 }
 
 func (kube *Kubernetes) GetCurrentNamespace() string {

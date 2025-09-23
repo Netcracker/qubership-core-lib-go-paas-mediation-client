@@ -132,36 +132,6 @@ func (mr *MockRouteInterfaceMockRecorder) UpdateOrCreateRoute(ctx, request, name
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOrCreateRoute", reflect.TypeOf((*MockRouteInterface)(nil).UpdateOrCreateRoute), ctx, request, namespace)
 }
 
-// WatchGatewayGRPCRoutes mocks base method.
-func (m *MockRouteInterface) WatchGatewayGRPCRoutes(ctx context.Context, namespace string, arg2 filter.Meta) (*watch.Handler, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WatchGatewayGRPCRoutes", ctx, namespace, arg2)
-	ret0, _ := ret[0].(*watch.Handler)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WatchGatewayGRPCRoutes indicates an expected call of WatchGatewayGRPCRoutes.
-func (mr *MockRouteInterfaceMockRecorder) WatchGatewayGRPCRoutes(ctx, namespace, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchGatewayGRPCRoutes", reflect.TypeOf((*MockRouteInterface)(nil).WatchGatewayGRPCRoutes), ctx, namespace, arg2)
-}
-
-// WatchGatewayHTTPRoutes mocks base method.
-func (m *MockRouteInterface) WatchGatewayHTTPRoutes(ctx context.Context, namespace string, arg2 filter.Meta) (*watch.Handler, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WatchGatewayHTTPRoutes", ctx, namespace, arg2)
-	ret0, _ := ret[0].(*watch.Handler)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WatchGatewayHTTPRoutes indicates an expected call of WatchGatewayHTTPRoutes.
-func (mr *MockRouteInterfaceMockRecorder) WatchGatewayHTTPRoutes(ctx, namespace, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchGatewayHTTPRoutes", reflect.TypeOf((*MockRouteInterface)(nil).WatchGatewayHTTPRoutes), ctx, namespace, arg2)
-}
-
 // WatchRoutes mocks base method.
 func (m *MockRouteInterface) WatchRoutes(ctx context.Context, namespace string, arg2 filter.Meta) (*watch.Handler, error) {
 	m.ctrl.T.Helper()
@@ -175,6 +145,114 @@ func (m *MockRouteInterface) WatchRoutes(ctx context.Context, namespace string, 
 func (mr *MockRouteInterfaceMockRecorder) WatchRoutes(ctx, namespace, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchRoutes", reflect.TypeOf((*MockRouteInterface)(nil).WatchRoutes), ctx, namespace, arg2)
+}
+
+// MockHttpRouteInterface is a mock of HttpRouteInterface interface.
+type MockHttpRouteInterface struct {
+	ctrl     *gomock.Controller
+	recorder *MockHttpRouteInterfaceMockRecorder
+	isgomock struct{}
+}
+
+// MockHttpRouteInterfaceMockRecorder is the mock recorder for MockHttpRouteInterface.
+type MockHttpRouteInterfaceMockRecorder struct {
+	mock *MockHttpRouteInterface
+}
+
+// NewMockHttpRouteInterface creates a new mock instance.
+func NewMockHttpRouteInterface(ctrl *gomock.Controller) *MockHttpRouteInterface {
+	mock := &MockHttpRouteInterface{ctrl: ctrl}
+	mock.recorder = &MockHttpRouteInterfaceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHttpRouteInterface) EXPECT() *MockHttpRouteInterfaceMockRecorder {
+	return m.recorder
+}
+
+// GetHttpRouteList mocks base method.
+func (m *MockHttpRouteInterface) GetHttpRouteList(ctx context.Context, namespace string, arg2 filter.Meta) ([]entity.HttpRoute, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHttpRouteList", ctx, namespace, arg2)
+	ret0, _ := ret[0].([]entity.HttpRoute)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHttpRouteList indicates an expected call of GetHttpRouteList.
+func (mr *MockHttpRouteInterfaceMockRecorder) GetHttpRouteList(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpRouteList", reflect.TypeOf((*MockHttpRouteInterface)(nil).GetHttpRouteList), ctx, namespace, arg2)
+}
+
+// WatchGatewayHTTPRoutes mocks base method.
+func (m *MockHttpRouteInterface) WatchGatewayHTTPRoutes(ctx context.Context, namespace string, arg2 filter.Meta) (*watch.Handler, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WatchGatewayHTTPRoutes", ctx, namespace, arg2)
+	ret0, _ := ret[0].(*watch.Handler)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WatchGatewayHTTPRoutes indicates an expected call of WatchGatewayHTTPRoutes.
+func (mr *MockHttpRouteInterfaceMockRecorder) WatchGatewayHTTPRoutes(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchGatewayHTTPRoutes", reflect.TypeOf((*MockHttpRouteInterface)(nil).WatchGatewayHTTPRoutes), ctx, namespace, arg2)
+}
+
+// MockGrpcRouteInterface is a mock of GrpcRouteInterface interface.
+type MockGrpcRouteInterface struct {
+	ctrl     *gomock.Controller
+	recorder *MockGrpcRouteInterfaceMockRecorder
+	isgomock struct{}
+}
+
+// MockGrpcRouteInterfaceMockRecorder is the mock recorder for MockGrpcRouteInterface.
+type MockGrpcRouteInterfaceMockRecorder struct {
+	mock *MockGrpcRouteInterface
+}
+
+// NewMockGrpcRouteInterface creates a new mock instance.
+func NewMockGrpcRouteInterface(ctrl *gomock.Controller) *MockGrpcRouteInterface {
+	mock := &MockGrpcRouteInterface{ctrl: ctrl}
+	mock.recorder = &MockGrpcRouteInterfaceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockGrpcRouteInterface) EXPECT() *MockGrpcRouteInterfaceMockRecorder {
+	return m.recorder
+}
+
+// GetGrpcRouteList mocks base method.
+func (m *MockGrpcRouteInterface) GetGrpcRouteList(ctx context.Context, namespace string, arg2 filter.Meta) ([]entity.GrpcRoute, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGrpcRouteList", ctx, namespace, arg2)
+	ret0, _ := ret[0].([]entity.GrpcRoute)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGrpcRouteList indicates an expected call of GetGrpcRouteList.
+func (mr *MockGrpcRouteInterfaceMockRecorder) GetGrpcRouteList(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGrpcRouteList", reflect.TypeOf((*MockGrpcRouteInterface)(nil).GetGrpcRouteList), ctx, namespace, arg2)
+}
+
+// WatchGatewayGRPCRoutes mocks base method.
+func (m *MockGrpcRouteInterface) WatchGatewayGRPCRoutes(ctx context.Context, namespace string, arg2 filter.Meta) (*watch.Handler, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WatchGatewayGRPCRoutes", ctx, namespace, arg2)
+	ret0, _ := ret[0].(*watch.Handler)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WatchGatewayGRPCRoutes indicates an expected call of WatchGatewayGRPCRoutes.
+func (mr *MockGrpcRouteInterfaceMockRecorder) WatchGatewayGRPCRoutes(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchGatewayGRPCRoutes", reflect.TypeOf((*MockGrpcRouteInterface)(nil).WatchGatewayGRPCRoutes), ctx, namespace, arg2)
 }
 
 // MockConfigMapInterface is a mock of ConfigMapInterface interface.
@@ -1319,6 +1397,36 @@ func (m *MockPlatformService) GetDeploymentList(ctx context.Context, namespace s
 func (mr *MockPlatformServiceMockRecorder) GetDeploymentList(ctx, namespace, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeploymentList", reflect.TypeOf((*MockPlatformService)(nil).GetDeploymentList), ctx, namespace, arg2)
+}
+
+// GetGrpcRouteList mocks base method.
+func (m *MockPlatformService) GetGrpcRouteList(ctx context.Context, namespace string, arg2 filter.Meta) ([]entity.GrpcRoute, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGrpcRouteList", ctx, namespace, arg2)
+	ret0, _ := ret[0].([]entity.GrpcRoute)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGrpcRouteList indicates an expected call of GetGrpcRouteList.
+func (mr *MockPlatformServiceMockRecorder) GetGrpcRouteList(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGrpcRouteList", reflect.TypeOf((*MockPlatformService)(nil).GetGrpcRouteList), ctx, namespace, arg2)
+}
+
+// GetHttpRouteList mocks base method.
+func (m *MockPlatformService) GetHttpRouteList(ctx context.Context, namespace string, arg2 filter.Meta) ([]entity.HttpRoute, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHttpRouteList", ctx, namespace, arg2)
+	ret0, _ := ret[0].([]entity.HttpRoute)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHttpRouteList indicates an expected call of GetHttpRouteList.
+func (mr *MockPlatformServiceMockRecorder) GetHttpRouteList(ctx, namespace, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHttpRouteList", reflect.TypeOf((*MockPlatformService)(nil).GetHttpRouteList), ctx, namespace, arg2)
 }
 
 // GetNamespace mocks base method.

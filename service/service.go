@@ -19,7 +19,15 @@ type RouteInterface interface {
 	GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error)
 	UpdateOrCreateRoute(ctx context.Context, request *entity.Route, namespace string) (*entity.Route, error)
 	WatchRoutes(ctx context.Context, namespace string, filter filter.Meta) (*watch.Handler, error)
+}
+
+type HttpRouteInterface interface {
+	GetHttpRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.HttpRoute, error)
 	WatchGatewayHTTPRoutes(ctx context.Context, namespace string, filter filter.Meta) (*watch.Handler, error)
+}
+
+type GrpcRouteInterface interface {
+	GetGrpcRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.GrpcRoute, error)
 	WatchGatewayGRPCRoutes(ctx context.Context, namespace string, filter filter.Meta) (*watch.Handler, error)
 }
 
@@ -110,4 +118,6 @@ type PlatformService interface {
 	SecretInterface
 	ServiceAccountInterface
 	ServiceInterface
+	HttpRouteInterface
+	GrpcRouteInterface
 }

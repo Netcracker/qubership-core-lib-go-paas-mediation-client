@@ -16,11 +16,12 @@ require (
 	github.com/openshift/client-go v0.0.0-20250324153519-f0faeb0f2f2e
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/mod v0.24.0
+	golang.org/x/mod v0.27.0
 	golang.org/x/net v0.38.0
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
+	sigs.k8s.io/gateway-api v1.1.0
 )
 
 require (
@@ -83,9 +84,10 @@ require (
 	github.com/valyala/fasthttp v1.59.0 // indirect
 	github.com/viney-shih/go-lock v1.1.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
@@ -98,7 +100,6 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
-	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect

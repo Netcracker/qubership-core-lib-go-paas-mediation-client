@@ -11,6 +11,7 @@ import (
 	networkingV1 "k8s.io/api/networking/v1"
 	paasErrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var BG2IngressClassName = "bg.mesh.qubership.org"
@@ -174,6 +175,32 @@ func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filt
 	}
 }
 
+func (kube *Kubernetes) GetHttpRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.HttpRoute, error) {
+	return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, kube.Cache.HTTPRoute,
+		func(listObj *gatewayv1.HTTPRouteList) (result []entity.HttpRoute) {
+			for _, item := range listObj.Items {
+				route := entity.RouteFromHTTPRoute(&item)
+				if route != nil {
+					result = append(result, *route)
+				}
+			}
+			return
+		})
+}
+
+func (kube *Kubernetes) GetGrpcRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.GrpcRoute, error) {
+	return ListWrapper(ctx, filter, kube.getGatewayV1Client().GRPCRoutes(namespace).List, kube.Cache.GRPCRoute,
+		func(listObj *gatewayv1.GRPCRouteList) (result []entity.GrpcRoute) {
+			for _, item := range listObj.Items {
+				route := entity.RouteFromGRPCRoute(&item)
+				if route != nil {
+					result = append(result, *route)
+				}
+			}
+			return
+		})
+}
+
 func (kube *Kubernetes) GetBadRouteLists(ctx context.Context) (map[string][]string, error) {
 	return kube.BadResources.Routes.ToSliceMap(), nil
 }
@@ -187,10 +214,16 @@ func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaF
 }
 
 func (kube *Kubernetes) WatchGatewayHTTPRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
+	if kube.WatchHandlers.HTTPRouteV1 == nil {
+		return nil, fmt.Errorf("k8s HTTPRoute is not supported")
+	}
 	return kube.WatchHandlers.HTTPRouteV1.Watch(ctx, namespace, metaFilter)
 }
 
 func (kube *Kubernetes) WatchGatewayGRPCRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
+	if kube.WatchHandlers.GRPCRouteV1 == nil {
+		return nil, fmt.Errorf("k8s GRPCRoute is not supported")
+	}
 	return kube.WatchHandlers.GRPCRouteV1.Watch(ctx, namespace, metaFilter)
 }
 
