@@ -224,7 +224,7 @@ func TestClientStopWatching(t *testing.T) {
 	initTestConfigLoader()
 
 	for _, scenario := range []string{"Cancel", "StopWatching"} {
-		t.Run(fmt.Sprint(scenario), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s", scenario), func(t *testing.T) {
 			watchExecutor1 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
 			watchExecutor2 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
 			watchExecutor3 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
@@ -413,7 +413,7 @@ func TestFilterByLabelsOrAnnotations(t *testing.T) {
 	initTestConfigLoader()
 
 	for _, scenario := range []string{"labels", "annotations", "labels+annotations"} {
-		t.Run(fmt.Sprint(scenario), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s", scenario), func(t *testing.T) {
 			watchExecutor1 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
 			watchExecutor2 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
 			watchExecutor3 := &testWatcher{channel: make(chan fakeWatch.Event, 5)}
