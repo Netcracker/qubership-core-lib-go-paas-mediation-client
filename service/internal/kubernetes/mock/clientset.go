@@ -75,10 +75,6 @@ func (c *KubeClientset) ResourceV1beta2() v1beta2.ResourceV1beta2Interface {
 	panic("implement me")
 }
 
-func (c *KubeClientset) NetworkingV1alpha1() v1alpha1.NetworkingV1alpha1Interface {
-	panic("implement me")
-}
-
 func (c *KubeClientset) FlowcontrolV1() v1.FlowcontrolV1Interface {
 	panic("not implemented")
 }
