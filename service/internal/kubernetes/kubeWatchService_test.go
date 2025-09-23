@@ -227,6 +227,22 @@ func TestWatchGatewayHTTPRoutesAddedEvent(t *testing.T) {
 	})
 }
 
+func TestWatchGatewayHTTPRoutesNotSupported(t *testing.T) {
+	r := require.New(t)
+	fakeWatchExecutor := newFakeWatchExecutor()
+	clientset := &kubernetes.Clientset{}
+	cert_client := &certClient.Clientset{}
+	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: testNamespace1,
+		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
+			clientset.CoreV1().RESTClient(),
+			cert_client.CertmanagerV1().RESTClient(),
+			clientset.NetworkingV1().RESTClient(),
+			clientset.ExtensionsV1beta1().RESTClient()),
+		Cache: cache.NewTestResourcesCache()}
+	_, err := kubeClient.WatchGatewayHTTPRoutes(context.Background(), testNamespace1, filter.Meta{})
+	r.EqualErrorf(err, "k8s HTTPRoute is not supported", "must return error if gateway http route is not supported")
+}
+
 func TestWatchGatewayGRPCRoutesAddedEvent(t *testing.T) {
 	r := require.New(t)
 	fakeWatchExecutor := newFakeWatchExecutor()
@@ -253,6 +269,22 @@ func TestWatchGatewayGRPCRoutesAddedEvent(t *testing.T) {
 			break
 		}
 	})
+}
+
+func TestWatchGatewayGRPCRoutesNotSupported(t *testing.T) {
+	r := require.New(t)
+	fakeWatchExecutor := newFakeWatchExecutor()
+	clientset := &kubernetes.Clientset{}
+	cert_client := &certClient.Clientset{}
+	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: testNamespace1,
+		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
+			clientset.CoreV1().RESTClient(),
+			cert_client.CertmanagerV1().RESTClient(),
+			clientset.NetworkingV1().RESTClient(),
+			clientset.ExtensionsV1beta1().RESTClient()),
+		Cache: cache.NewTestResourcesCache()}
+	_, err := kubeClient.WatchGatewayGRPCRoutes(context.Background(), testNamespace1, filter.Meta{})
+	r.EqualErrorf(err, "k8s GRPCRoute is not supported", "must return error if gateway grpc route is not supported")
 }
 
 func TestWatchGatewayHTTPRoutesDeletedEvent(t *testing.T) {
