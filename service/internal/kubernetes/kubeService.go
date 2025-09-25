@@ -16,10 +16,14 @@ import (
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	"golang.org/x/mod/semver"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes/scheme"
 	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	extensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	networkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1_client "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 const (
@@ -205,6 +209,22 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		b.client.NetworkingV1().RESTClient(),
 		b.client.ExtensionsV1beta1().RESTClient(),
 	)
+	if hasKindGatewayApi("HTTPRoute", b.client.KubernetesInterface.Discovery()) {
+		err := gatewayv1.Install(scheme.Scheme)
+		if err != nil {
+			return nil, err
+		}
+		watchEventHandlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	}
+
+	if hasKindGatewayApi("GRPCRoute", b.client.KubernetesInterface.Discovery()) {
+		err := gatewayv1.Install(scheme.Scheme)
+		if err != nil {
+			return nil, err
+		}
+		watchEventHandlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	}
+
 	ctx := context.Background() //todo make all parent functions to pass context, this context will be able to cancel everything inside Kubernetes srv when it's no longer needed
 	cacheAdapters, err := NewCacheAdapters(ctx, b.namespace, b.cache, watchEventHandlers)
 	if err != nil {
@@ -261,6 +281,10 @@ func (kube *Kubernetes) getCertmanagerV1Client() certmanagerv1.CertmanagerV1Inte
 	return kube.client.CertmanagerV1()
 }
 
+func (kube *Kubernetes) getGatewayV1Client() gatewayv1_client.GatewayV1Interface {
+	return kube.client.GatewayV1()
+}
+
 func (kube *Kubernetes) GetCurrentNamespace() string {
 	return kube.namespace
 }
@@ -271,4 +295,21 @@ func (kube *Kubernetes) GetKubernetesVersion() (string, error) {
 		return "", err
 	}
 	return version.GitVersion, err
+}
+
+func hasKindGatewayApi(kind string, discovery discovery.DiscoveryInterface) bool {
+	resources, err := discovery.ServerResourcesForGroupVersion("gateway.networking.k8s.io/v1")
+	if err != nil {
+		logger.Errorf("can't get server group version: %v", err)
+		return false
+	}
+	for _, res := range resources.APIResources {
+		if res.Kind == kind {
+			return true
+		}
+	}
+
+	logger.Infof("gateway.networking.k8s.io for '%s' kind is not supported; skip it", kind)
+
+	return false
 }

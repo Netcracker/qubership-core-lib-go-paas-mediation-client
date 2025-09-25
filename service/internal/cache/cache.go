@@ -25,6 +25,8 @@ type ResourcesCache struct {
 	Certificates *ResourceCache[entity.Certificate]
 	ConfigMaps   *ResourceCache[entity.ConfigMap]
 	Ingresses    *ResourceCache[entity.Route]
+	HTTPRoute    *ResourceCache[entity.HttpRoute]
+	GRPCRoute    *ResourceCache[entity.GrpcRoute]
 	Secrets      *ResourceCache[entity.Secret]
 	Services     *ResourceCache[entity.Service]
 	Namespaces   *ResourceCache[entity.Namespace] // todo for backward compatibility, delete later
@@ -87,6 +89,12 @@ func NewResourcesCache(numItems int64, maxSizeInBytes int64, maxItemSizeInBytes 
 		}
 		if cacheName == AllCache || cacheName == NamespaceCache {
 			resourceCache.Namespaces = NewResourceCache(&entity.Namespace{}, newEntityAdapter[entity.Namespace](adapter))
+		}
+		if cacheName == AllCache || cacheName == HttpRouteCache {
+			resourceCache.HTTPRoute = NewResourceCache(&entity.HttpRoute{}, newEntityAdapter[entity.HttpRoute](adapter))
+		}
+		if cacheName == AllCache || cacheName == GrpcRouteCache {
+			resourceCache.GRPCRoute = NewResourceCache(&entity.GrpcRoute{}, newEntityAdapter[entity.GrpcRoute](adapter))
 		}
 	}
 	return resourceCache, nil

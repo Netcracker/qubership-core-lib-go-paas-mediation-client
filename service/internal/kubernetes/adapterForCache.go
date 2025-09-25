@@ -15,6 +15,7 @@ import (
 	networkingV1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var retryWatchTimeout = 5 * time.Second
@@ -33,6 +34,8 @@ type CacheAdapters struct {
 	Services              *CacheAdapter[*coreV1.Service, entity.Service]
 	Secrets               *CacheAdapter[*coreV1.Secret, entity.Secret]
 	IngressesNetworkingV1 *CacheAdapter[*networkingV1.Ingress, entity.Route]
+	HTTPRouteV1           *CacheAdapter[*gatewayv1.HTTPRoute, entity.HttpRoute]
+	GRPCRouteV1           *CacheAdapter[*gatewayv1.GRPCRoute, entity.GrpcRoute]
 }
 
 func NewCacheAdapters(ctx context.Context, namespace string, cache *cache.ResourcesCache, watchHandlers *SharedWatchHandlers) (*CacheAdapters, error) {
@@ -63,6 +66,19 @@ func NewCacheAdapters(ctx context.Context, namespace string, cache *cache.Resour
 			return nil, err
 		}
 	}
+
+	if cache.HTTPRoute != nil && watchHandlers.HTTPRouteV1 != nil {
+		if adapters.HTTPRouteV1, err = newCacheAdapter(ctx, namespace, cache.HTTPRoute, watchHandlers.HTTPRouteV1); err != nil {
+			return nil, err
+		}
+	}
+
+	if cache.GRPCRoute != nil && watchHandlers.GRPCRouteV1 != nil {
+		if adapters.GRPCRouteV1, err = newCacheAdapter(ctx, namespace, cache.GRPCRoute, watchHandlers.GRPCRouteV1); err != nil {
+			return nil, err
+		}
+	}
+
 	return adapters, nil
 }
 
