@@ -13,7 +13,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var BG2IngressClassName = "bg.mesh.qubership.org"
+var BG2IngressClassName = "bg.mesh.netcracker.com"
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	if kube.UseNetworkingV1Ingress {
