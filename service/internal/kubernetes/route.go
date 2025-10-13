@@ -63,7 +63,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 			return nil, e
 		}
 		ingressToUpdate := route.ToIngressNetworkingV1()
-		ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
+		//ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
 		if className := ingressToUpdate.Spec.IngressClassName; className == nil || *className == "" {
 			ingressToUpdate.Spec.IngressClassName = originalIngress.Spec.IngressClassName
 		}
