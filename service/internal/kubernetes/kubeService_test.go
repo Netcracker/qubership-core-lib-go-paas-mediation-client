@@ -24,6 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
 
 const (
@@ -354,4 +356,133 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NoError(err)
 	assertions.NotNil(kubernetes)
 	assertions.NotNil(kubernetes.Cache)
+}
+
+func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
+	assertions := require.New(t)
+	k8sClient := fake.NewClientset()
+	// advertise gateway kinds in discovery
+	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{{
+		GroupVersion: "gateway.networking.k8s.io/v1",
+		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
+	}}
+	// gateway client (fake)
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kube, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.HTTPRouteV1)
+}
+
+func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
+	assertions := require.New(t)
+	k8sClient := fake.NewClientset()
+	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{{
+		GroupVersion: "gateway.networking.k8s.io/v1",
+		APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
+	}}
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kube, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.GRPCRouteV1)
+}
+
+func Test_GetHttpRouteList_success(t *testing.T) {
+	r := require.New(t)
+	ns := testNamespace1
+	path := "/api"
+	var port gatewayv1.PortNumber = 8080
+	hr1 := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "hr-1", Namespace: ns, ResourceVersion: "1"},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Hostnames: []gatewayv1.Hostname{"example.com"},
+			Rules: []gatewayv1.HTTPRouteRule{{
+				Matches:     []gatewayv1.HTTPRouteMatch{{Path: &gatewayv1.HTTPPathMatch{Value: &path}}},
+				BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-a"), Port: &port}}}},
+			}},
+		},
+	}
+	hr2 := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "hr-2", Namespace: ns, ResourceVersion: "2"},
+		Spec:       gatewayv1.HTTPRouteSpec{Hostnames: []gatewayv1.Hostname{"example.org"}, Rules: []gatewayv1.HTTPRouteRule{{BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-b")}}}}}}},
+	}
+
+	gwClient := gatewayclientfake.NewSimpleClientset(hr1, hr2)
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+		Cache: cache.NewTestResourcesCache(cache.HttpRouteCache)}
+
+	list, err := kube.GetHttpRouteList(context.Background(), ns, filter.Meta{})
+	r.NoError(err)
+	r.Equal(2, len(list))
+	r.Equal(*entity.RouteFromHTTPRoute(hr1), list[0])
+}
+
+func Test_GetGrpcRouteList_success(t *testing.T) {
+	r := require.New(t)
+	ns := testNamespace1
+	var port gatewayv1.PortNumber = 9090
+	gr1 := &gatewayv1.GRPCRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "gr-1", Namespace: ns, ResourceVersion: "1"},
+		Spec:       gatewayv1.GRPCRouteSpec{Hostnames: []gatewayv1.Hostname{"grpc.example.com"}, Rules: []gatewayv1.GRPCRouteRule{{BackendRefs: []gatewayv1.GRPCBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-g"), Port: &port}}}}}}},
+	}
+	gr2 := &gatewayv1.GRPCRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "gr-2", Namespace: ns, ResourceVersion: "2"},
+		Spec:       gatewayv1.GRPCRouteSpec{Hostnames: []gatewayv1.Hostname{"grpc2.example.com"}, Rules: []gatewayv1.GRPCRouteRule{{BackendRefs: []gatewayv1.GRPCBackendRef{{BackendRef: gatewayv1.BackendRef{BackendObjectReference: gatewayv1.BackendObjectReference{Name: gatewayv1.ObjectName("svc-h")}}}}}}},
+	}
+
+	gwClient := gatewayclientfake.NewSimpleClientset(gr1, gr2)
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+		Cache: cache.NewTestResourcesCache(cache.GrpcRouteCache)}
+
+	list, err := kube.GetGrpcRouteList(context.Background(), ns, filter.Meta{})
+	r.NoError(err)
+	r.Equal(2, len(list))
+	r.Equal(*entity.RouteFromGRPCRoute(gr1), list[0])
+}
+
+func TestHasKindGatewayApi_HTTPRouteSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
+		},
+	}
+	r.True(hasKindGatewayApi("HTTPRoute", fakeDisc))
+}
+
+func TestHasKindGatewayApi_GRPCRouteSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
+		},
+	}
+	r.True(hasKindGatewayApi("GRPCRoute", fakeDisc))
+}
+
+func TestHasKindGatewayApi_KindNotSupported(t *testing.T) {
+	r := require.New(t)
+	clientset := fake.NewClientset()
+	fakeDisc := clientset.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "gateway.networking.k8s.io/v1",
+			APIResources: []metav1.APIResource{{Kind: "SomeOtherKind"}},
+		},
+	}
+	r.False(hasKindGatewayApi("GRPCRoute", fakeDisc))
+	r.False(hasKindGatewayApi("HTTPRoute", fakeDisc))
 }

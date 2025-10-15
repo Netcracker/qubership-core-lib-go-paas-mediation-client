@@ -57,7 +57,6 @@ func (route Route) ToIngress() *v1beta1.Ingress {
 	}
 	ingress.Spec.IngressClassName = route.Spec.IngressClassName
 	return &ingress
-
 }
 
 func (route Route) ToIngressNetworkingV1() *networkingV1.Ingress {
@@ -96,7 +95,6 @@ func (route Route) ToIngressNetworkingV1() *networkingV1.Ingress {
 	}
 	ingress.Spec.IngressClassName = route.Spec.IngressClassName
 	return &ingress
-
 }
 
 func (route Route) ToOsRoute() *v1.Route {

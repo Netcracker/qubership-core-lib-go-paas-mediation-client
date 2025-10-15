@@ -6,16 +6,19 @@ import (
 	projectv1client "github.com/openshift/client-go/project/clientset/versioned/typed/project/v1"
 	routev1client "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	k8s "k8s.io/client-go/kubernetes"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
 type (
 	KubernetesInterface  = k8s.Interface
 	CertmanagerInterface = cm.Interface
+	GatewayInterface     = gatewayclient.Interface
 )
 
 type KubernetesApi struct {
 	KubernetesInterface
 	CertmanagerInterface
+	GatewayInterface
 }
 
 type OpenshiftApi struct {

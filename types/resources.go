@@ -12,6 +12,8 @@ const (
 	Secrets         PaasResourceType = "secrets"
 	ServiceAccounts PaasResourceType = "serviceaccounts"
 	Services        PaasResourceType = "services"
+	HTTPRoutes      PaasResourceType = "httproutes"
+	GRPCRoutes      PaasResourceType = "grpcroutes"
 
 	Projects PaasResourceType = "projects" // todo deprecated, will be removed
 	Routes   PaasResourceType = "routes"   // todo deprecated, will be removed

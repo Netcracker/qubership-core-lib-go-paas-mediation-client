@@ -27,6 +27,7 @@ import (
 	fakeWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func initTestConfigLoader() {
@@ -612,6 +613,26 @@ func createIngress(name string, generation int64, resourceVersion string) *netwo
 	ingress.Generation = generation
 	ingress.Spec = networkingV1.IngressSpec{}
 	return ingress
+}
+
+func createHttpRoute(name string, generation int64, resourceVersion string) *gatewayv1.HTTPRoute {
+	httpRoute := &gatewayv1.HTTPRoute{}
+	httpRoute.Name = name
+	httpRoute.Namespace = testNamespace1
+	httpRoute.ResourceVersion = resourceVersion
+	httpRoute.Generation = generation
+	httpRoute.Spec = gatewayv1.HTTPRouteSpec{}
+	return httpRoute
+}
+
+func createGrpcRoute(name string, generation int64, resourceVersion string) *gatewayv1.GRPCRoute {
+	grpcRoute := &gatewayv1.GRPCRoute{}
+	grpcRoute.Name = name
+	grpcRoute.Namespace = testNamespace1
+	grpcRoute.ResourceVersion = resourceVersion
+	grpcRoute.Generation = generation
+	grpcRoute.Spec = gatewayv1.GRPCRouteSpec{}
+	return grpcRoute
 }
 
 func createCertificate(name string, generation int64, resourceVersion string) *cmv1.Certificate {

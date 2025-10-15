@@ -17,6 +17,7 @@ import (
 	networkingV1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var (
@@ -37,6 +38,8 @@ type SharedWatchHandlers struct {
 	Secrets               *SharedWatchHandler[*v1.Secret, entity.Secret]
 	IngressesNetworkingV1 *SharedWatchHandler[*networkingV1.Ingress, entity.Route]
 	IngressesV1Beta1      *SharedWatchHandler[*v1beta1.Ingress, entity.Route]
+	HTTPRouteV1           *SharedWatchHandler[*gatewayv1.HTTPRoute, entity.HttpRoute]
+	GRPCRouteV1           *SharedWatchHandler[*gatewayv1.GRPCRoute, entity.GrpcRoute]
 }
 
 type SharedWatchHandler[F runtime.Object, T entity.HasMetadata] struct {
@@ -132,6 +135,22 @@ func NewSharedWatchEventHandlers(executor pmWatch.Executor,
 			})
 		}),
 	}
+}
+
+func (h *SharedWatchHandlers) WithHTTPRouteV1(executor pmWatch.Executor, clientTimeout time.Duration, gatewayV1 rest.Interface) {
+	h.HTTPRouteV1 = NewSharedWatchEventHandler(types.HTTPRoutes, clientTimeout, func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
+		return newSharedNamespaceWatchHandler(namespace, kind, clientTimeout, func(namespace string, kind types.PaasResourceType) *RestWatchEventHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
+			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.RouteFromHTTPRoute)
+		})
+	})
+}
+
+func (h *SharedWatchHandlers) WithGRPCRouteV1(executor pmWatch.Executor, clientTimeout time.Duration, gatewayV1 rest.Interface) {
+	h.GRPCRouteV1 = NewSharedWatchEventHandler(types.GRPCRoutes, clientTimeout, func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[*gatewayv1.GRPCRoute, entity.GrpcRoute] {
+		return newSharedNamespaceWatchHandler(namespace, kind, clientTimeout, func(namespace string, kind types.PaasResourceType) *RestWatchEventHandler[*gatewayv1.GRPCRoute, entity.GrpcRoute] {
+			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.RouteFromGRPCRoute)
+		})
+	})
 }
 
 func NewSharedWatchEventHandler[F runtime.Object, T entity.HasMetadata](kind types.PaasResourceType, clientTimeout time.Duration, handlerProvider func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[F, T]) *SharedWatchHandler[F, T] {
