@@ -24,7 +24,7 @@ func Test_GetService_success(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	serviceForClientSet := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &serviceForClientSet)
+	clientset := fake.NewClientset(&namespace, &serviceForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	srv, err := kube.GetService(ctx, testService, testNamespace1)
@@ -38,7 +38,7 @@ func Test_GetService_usingCache_success(t *testing.T) {
 
 	serviceTest := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace1}}
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	clientset.Discovery().(*fakediscovery.FakeDiscovery).FakedServerVersion = &version.Info{GitVersion: "v1.23.0"}
 	clientset.PrependReactor("get", "services", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
@@ -61,7 +61,7 @@ func Test_DeleteService_success(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	serviceForClientSet := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &serviceForClientSet)
+	clientset := fake.NewClientset(&namespace, &serviceForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	err := kube.DeleteService(ctx, testService, testNamespace1)
@@ -72,7 +72,7 @@ func Test_UpdateOrCreateSecrvice_CreateNew_success(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	ctx := context.Background()
 	srv := entity.Service{Metadata: entity.Metadata{Name: testService, Namespace: testNamespace1}}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	updatedService, err := kube.UpdateOrCreateService(ctx, &srv, testNamespace1)
@@ -85,7 +85,7 @@ func Test_UpdateOrCreateService_Update_success(t *testing.T) {
 	srv := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: testService, Namespace: testNamespace1},
 		Spec: v1.ServiceSpec{Type: "1"}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &srv)
+	clientset := fake.NewClientset(&namespace, &srv)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 

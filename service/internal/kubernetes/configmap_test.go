@@ -24,7 +24,7 @@ func Test_GetConfigMap_success(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	configmapForClientSet := v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &configmapForClientSet)
+	clientset := fake.NewClientset(&namespace, &configmapForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	configMap, err := kube.GetConfigMap(ctx, testConfigMap, testNamespace1)
@@ -36,7 +36,7 @@ func Test_GetConfigMap_success(t *testing.T) {
 func Test_GetConfigMap_usingCache_success(t *testing.T) {
 	ctx := context.Background()
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	//	version, err := b.client.KubernetesInterface.Discovery().ServerVersion()
 	clientset.Discovery().(*fakediscovery.FakeDiscovery).FakedServerVersion = &version.Info{GitVersion: "v1.23.0"}
@@ -60,7 +60,7 @@ func Test_UpdateOrCreateConfigMap_CreateNew_success(t *testing.T) {
 	ctx := context.Background()
 	configMap := entity.ConfigMap{Metadata: entity.Metadata{Name: testConfigMap, Namespace: testNamespace1},
 		Data: map[string]string{"body": "test1"}}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	updatedConfigmap, err := kube.UpdateOrCreateConfigMap(ctx, &configMap, testNamespace1)
@@ -73,7 +73,7 @@ func Test_UpdateOrCreateConfigMap_Update_success(t *testing.T) {
 	configmapForClientSet := v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace1},
 		Data: map[string]string{"body": "test1"}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &configmapForClientSet)
+	clientset := fake.NewClientset(&namespace, &configmapForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	configMap := entity.ConfigMap{Metadata: entity.Metadata{Name: testConfigMap, Namespace: testNamespace1},
@@ -88,7 +88,7 @@ func Test_DeleteConfigMap_success(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	configmapForClientSet := v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testConfigMap, Namespace: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &configmapForClientSet)
+	clientset := fake.NewClientset(&namespace, &configmapForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	err := kube.DeleteConfigMap(ctx, testConfigMap, testNamespace1)

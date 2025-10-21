@@ -24,7 +24,7 @@ func Test_GetDeployment_Success(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-name",
 			Namespace: testNamespace1},
 		Spec: v1.DeploymentSpec{}}
-	clientset := fake.NewSimpleClientset(&deployment)
+	clientset := fake.NewClientset(&deployment)
 	cert_client := &certClient.Clientset{}
 	kube, err := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -44,7 +44,7 @@ func Test_GetDeployment_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	expectedError := fmt.Errorf("test error during list Deployment")
 	clientset.Fake.PrependReactor("get", "deployments",
@@ -107,7 +107,7 @@ func Test_GetDeploymentList_Success(t *testing.T) {
 		},
 		Spec: v1.DeploymentSpec{}}
 
-	clientset := fake.NewSimpleClientset(&deployment1, &deployment2, &deployment3)
+	clientset := fake.NewClientset(&deployment1, &deployment2, &deployment3)
 	cert_client := &certClient.Clientset{}
 	kube, err := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -137,7 +137,7 @@ func Test_GetDeploymentList_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	expectedError := fmt.Errorf("test error during list Deployment")
 	clientset.Fake.PrependReactor("list", "deployments",

@@ -36,14 +36,14 @@ func Test_getLatestReplicationController_success(t *testing.T) {
 			Spec: v12.ReplicationControllerSpec{}})
 
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&testRepControllerList[0], &testRepControllerList[1])
+	clientset := fake.NewClientset(&testRepControllerList[0], &testRepControllerList[1])
 	cert_client := &certClient.Clientset{}
 	kubeClient, err := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
@@ -62,14 +62,14 @@ func Test_deploymentConfigIsExist_success(t *testing.T) {
 		Spec:       v12.ReplicationControllerSpec{}}
 
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&repController)
+	clientset := fake.NewClientset(&repController)
 	cert_client := &certClient.Clientset{}
 	kubeClient, err := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 	checkExist, err := os.deploymentConfigIsExist(ctx, testNamespace, deploymentConfigName)
@@ -96,7 +96,7 @@ func Test_RolloutDeployment_ConfigNotExist(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(&testDeployment, &replica1)
+	clientset := fake.NewClientset(&testDeployment, &replica1)
 	clientset.Fake.PrependReactor("patch", "*",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 			replica2 := &v1beta1.ReplicaSet{
@@ -110,9 +110,9 @@ func Test_RolloutDeployment_ConfigNotExist(t *testing.T) {
 
 	cert_client := &certClient.Clientset{}
 	kubeClient, err := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 	check, err := os.Kubernetes.RolloutDeployment(ctx, testDeploymentName, testNamespace)
 	assert.Nil(t, err)

@@ -35,15 +35,15 @@ var testNamespace = "test-ns"
 func prepareFakeClients() (*backend.KubernetesApi, *backend.OpenshiftApi) {
 	fakeVersion := version.Info{GitVersion: "v1.16.3"}
 	testNamespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace}}
-	kubernetesClientSet := fake.NewSimpleClientset(&testNamespace)
+	kubernetesClientSet := fake.NewClientset(&testNamespace)
 	certManagerClientSet := fakecertmanager.NewSimpleClientset()
 	fakeDiscoveryClient := kubernetesClientSet.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &fakeVersion
 	fakeKubernetesClient := &backend.KubernetesApi{KubernetesInterface: kubernetesClientSet, CertmanagerInterface: certManagerClientSet}
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 	fakeOpenshiftClient := &backend.OpenshiftApi{
 		RouteV1Interface:   routeV1Client,
 		ProjectV1Interface: projectV1Client,
