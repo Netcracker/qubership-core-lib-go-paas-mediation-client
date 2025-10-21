@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
+	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/backend"
 	"github.com/stretchr/testify/assert"
@@ -386,4 +387,62 @@ func Test_RolloutDeployments(t *testing.T) {
 	assert.Equal(t, testDeploymentName+"-set1", firstDeployment.Active)
 	assert.Equal(t, testDeploymentName+"-set2", firstDeployment.Rolling)
 	assert.Equal(t, "ReplicaSet", firstDeployment.Kind)
+}
+
+func TestCorrectPod(t *testing.T) {
+	tests := []struct {
+		name        string
+		podName     string
+		replicasMap map[string][]string
+		want        bool
+	}{
+		{
+			name:    "matches exact replica prefix",
+			podName: "frontend-abc123",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend"},
+			},
+			want: true,
+		},
+		{
+			name:    "matches one of multiple prefixes",
+			podName: "backend-v2-xyz",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend", "backend-v2"},
+			},
+			want: true,
+		},
+		{
+			name:    "no match for pod name",
+			podName: "unrelated-pod",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend", "backend-v2"},
+			},
+			want: false,
+		},
+		{
+			name:        "empty replicas map",
+			podName:     "something",
+			replicasMap: map[string][]string{},
+			want:        false,
+		},
+		{
+			name:    "pod name shorter than prefix",
+			podName: "front",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend"},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &entity.Pod{Metadata: entity.Metadata{Name: tt.podName}}
+			got := correctPod(pod, tt.replicasMap)
+			if got != tt.want {
+				t.Errorf("correctPod(%q) = %v, want %v", tt.podName, got, tt.want)
+			}
+		})
+	}
 }
