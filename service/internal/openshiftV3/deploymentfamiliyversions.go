@@ -15,7 +15,7 @@ func (os *OpenshiftV3Client) GetDeploymentFamilyVersions(ctx context.Context, fa
 		logger.ErrorC(ctx, "Error to get a list of deploymentconfig: %+v", err)
 		return nil, err
 	}
-	var result []entity.DeploymentFamilyVersion
+	result := []entity.DeploymentFamilyVersion{}
 	//goland:noinspection GoPreferNilSlice
 	logger.InfoC(ctx, "Found %d deployment configs and deployments filtered by family_name=%s", len(deploymentConfigList), familyName)
 	for _, deployment := range deploymentConfigList {
