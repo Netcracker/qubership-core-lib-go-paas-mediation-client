@@ -145,7 +145,7 @@ func worker[T any](id int, wChan chan *taskWrapper[T]) {
 	defer func() {
 		if err := recover(); err != nil {
 			logger.Error("panic occurred in worker #%d, recovering: %+v", id, err)
-			worker(id, wChan)
+			worker[T](id, wChan)
 		}
 	}()
 	for task := range wChan {

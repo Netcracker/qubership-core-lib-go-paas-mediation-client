@@ -40,7 +40,7 @@ func getTestRepController() corev1.ReplicationController {
 }
 
 func getTestPodsList() []corev1.Pod {
-	testPods := []corev1.Pod{}
+	var testPods []corev1.Pod
 	testPods = append(testPods, corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: testReplicaSet + "pod1",
 			Namespace: testNamespace1}, Spec: corev1.PodSpec{ServiceAccountName: "build-robot"},
@@ -118,7 +118,7 @@ func Test_getReplicaSet_extensionV1Client_success(t *testing.T) {
 }
 
 func Test_getReplicaSetList_appsV1Client_success(t *testing.T) {
-	testReplicaSetList := []v1.ReplicaSet{}
+	var testReplicaSetList []v1.ReplicaSet
 	testReplicaSetList = append(testReplicaSetList, v1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "set1",
 			Namespace: testNamespace1},
@@ -157,7 +157,7 @@ func Test_getReplicaSetList_extensionV1Client_success(t *testing.T) {
 
 func Test_getLatestReplicaSet_appsV1Client_success(t *testing.T) {
 	desiredResultVersion := "5"
-	testReplicaSetList := []v1.ReplicaSet{}
+	var testReplicaSetList []v1.ReplicaSet
 	testReplicaSetList = append(testReplicaSetList,
 		v1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{Name: testDeploymentName + "set1",

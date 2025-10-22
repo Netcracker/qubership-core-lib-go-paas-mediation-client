@@ -21,7 +21,7 @@ import (
 
 func Test_getLatestReplicationController_success(t *testing.T) {
 	desiredResultVersion := "5"
-	testRepControllerList := []v12.ReplicationController{}
+	var testRepControllerList []v12.ReplicationController
 	testRepControllerList = append(testRepControllerList,
 		v12.ReplicationController{
 			ObjectMeta: metav1.ObjectMeta{Name: testDeploymentName + "set1",
