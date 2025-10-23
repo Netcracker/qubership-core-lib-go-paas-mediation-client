@@ -16,7 +16,7 @@ func Test_NewDeploymentResponse(t *testing.T) {
 }
 
 func Test_NewDeploymentResponseEmpty(t *testing.T) {
-	var deployments []*DeploymentRollout
+	deployments := []*DeploymentRollout{}
 	response := NewDeploymentResponse(deployments)
 	require.Equal(t, []DeploymentRollout{}, response.Deployments)
 }

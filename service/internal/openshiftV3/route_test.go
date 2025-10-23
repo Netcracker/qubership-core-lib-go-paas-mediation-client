@@ -34,17 +34,17 @@ var (
 //func Test_GetRoute_usingCache_success(t *testing.T) {
 //	ctx := context.Background()
 //
-//	kubeClientSet := fake.NewClientset()
+//	kubeClientSet := fake.NewSimpleClientset()
 //	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet})
 //
-//	routeClientset := openshiftroutefake.NewClientset()
+//	routeClientset := openshiftroutefake.NewSimpleClientset()
 //	routeClientset.PrependReactor("*", "*", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 //		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
 //	})
 //	routeV1Client := routeClientset.RouteV1()
-//	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
+//	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
 //
-//	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
+//	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
 //
 //	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 //

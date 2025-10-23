@@ -48,8 +48,8 @@ func Test_GetCertificate_Success(t *testing.T) {
 //func Test_GetCertificate_usingCache_success(t *testing.T) {
 //	ctx := context.Background()
 //
-//	k8s_client := fake_k8s.NewClientset()
-//	cert_client := fake_cert.NewClientset()
+//	k8s_client := fake_k8s.NewSimpleClientset()
+//	cert_client := fake_cert.NewSimpleClientset()
 //	cert_client.PrependReactor("*", "*", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 //		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
 //	})
