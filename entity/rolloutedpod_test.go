@@ -33,3 +33,48 @@ func Test_NewDeploymentsStatus(t *testing.T) {
 	result := *(NewDeploymentsStatus(podsMap))
 	assert.Equal(t, 2, len(result[testDeploymentName]))
 }
+
+func Test_NewRolledOutPod_Ready(t *testing.T) {
+	pod := Pod{
+		Metadata: Metadata{
+			Name: testPod,
+		},
+		Status: PodStatus{
+			Conditions: []StatusCondition{
+				{Type: "Ready", Status: "True"},
+			},
+		},
+	}
+	rollouted := &RolloutedPod{testPod, "Ready"}
+	assert.Equal(t, rollouted, NewRolledOutPod(pod))
+}
+
+func Test_NewRolledOutPod_NotReady(t *testing.T) {
+	pod := Pod{
+		Metadata: Metadata{
+			Name: testPod,
+		},
+		Status: PodStatus{
+			Conditions: []StatusCondition{
+				{Type: "Ready", Status: "False"},
+			},
+		},
+	}
+	rollouted := &RolloutedPod{testPod, "Not ready"}
+	assert.Equal(t, rollouted, NewRolledOutPod(pod))
+}
+
+func Test_NewRolledOutPod_NoReadyCondition(t *testing.T) {
+	pod := Pod{
+		Metadata: Metadata{
+			Name: testPod,
+		},
+		Status: PodStatus{
+			Conditions: []StatusCondition{
+				{Type: "Initialized", Status: "True"},
+			},
+		},
+	}
+	rollouted := &RolloutedPod{testPod, ""}
+	assert.Equal(t, rollouted, NewRolledOutPod(pod))
+}

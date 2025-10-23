@@ -1,12 +1,13 @@
 package entity
 
 import (
+	"testing"
+
 	osV1 "github.com/openshift/api/project/v1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"testing"
 )
 
 func Test_NewNamespace(t *testing.T) {
@@ -39,4 +40,30 @@ func getEntityNamespace(meta metav1.ObjectMeta) *Namespace {
 	metadata := NewMetadata("Namespace", meta.Name, meta.Name, string(meta.UID), meta.Generation,
 		meta.ResourceVersion, meta.Annotations, meta.Labels)
 	return &Namespace{Metadata: metadata}
+}
+
+func Test_NewNamespaceFromInterface(t *testing.T) {
+	namespaceMap := map[string]any{
+		"metadata": map[string]any{
+			"name":      "test-namespace",
+			"namespace": "default",
+			"labels": map[string]any{
+				"app": "test-app",
+			},
+			"annotations": map[string]any{
+				"description": "test namespace",
+			},
+		},
+	}
+	result := NewNamespaceFromInterface(namespaceMap)
+	assert.NotNil(t, result)
+	assert.Equal(t, "test-namespace", result.Name)
+	assert.Equal(t, "test-namespace", result.Namespace)
+	assert.Equal(t, "test-app", result.Labels["app"])
+	assert.Equal(t, "test namespace", result.Annotations["description"])
+
+	// Test with nil
+	assert.Panics(t, func() {
+		NewNamespaceFromInterface(nil)
+	})
 }
