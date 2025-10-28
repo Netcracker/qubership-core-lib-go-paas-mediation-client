@@ -94,7 +94,7 @@ platformService.RolloutDeployments(ctx, namespace, deploymentNames)
 ```
 
 #### Blue Green detection mechanism for Ingress creation
-Blue Green 2.0 requires Ingresses to be created with ingressClass 'bg.mesh.qubership.org'
+Blue Green 2.0 requires Ingresses to be created with ingressClass 'bg.mesh.netcracker.com'
 paas-mediation-client will detect BlueGreen mode automatically in the following cases:
 
 1. You created client providing manually consul enabled, consul url and consul token
