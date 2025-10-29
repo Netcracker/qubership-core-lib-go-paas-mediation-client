@@ -27,6 +27,7 @@ type ApiEvent struct {
 func (w *ApiEvent) GetControlMessageDetails() ControlMessageDetails {
 	return w.controlMessageDetails
 }
+
 func ApiEventConstructor(watchApiType string, object any, controlMessage ControlMessageDetails) ApiEvent {
 	return ApiEvent{watchApiType, object, controlMessage}
 }

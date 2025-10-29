@@ -29,7 +29,7 @@ func Test_GetCertificate_Success(t *testing.T) {
 		},
 		Spec: v1.CertificateSpec{},
 	}
-	k8sclient := fake_k8s.NewSimpleClientset()
+	k8sclient := fake_k8s.NewClientset()
 	certclient := fake_cert.NewSimpleClientset(&certificate)
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8sclient, CertmanagerInterface: certclient})
 	// found
@@ -70,7 +70,7 @@ func Test_GetCertificate_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset()
 	expectedError := fmt.Errorf("test error during list Certificate")
 	cert_client.Fake.PrependReactor("get", "certificates",
@@ -133,7 +133,7 @@ func Test_GetCertificateList_Success(t *testing.T) {
 		},
 		Spec: v1.CertificateSpec{}}
 
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset(&certificate1, &certificate2, &certificate3)
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8s_client, CertmanagerInterface: cert_client})
 
@@ -170,7 +170,7 @@ func Test_GetCertificateList_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset()
 	expectedError := fmt.Errorf("test error during list Certificate")
 	cert_client.Fake.PrependReactor("list", "certificates",
@@ -193,7 +193,7 @@ func Test_GetCertificateList_Error(t *testing.T) {
 func Test_CreateCertificate_Success(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset()
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8s_client, CertmanagerInterface: cert_client})
 
@@ -215,7 +215,7 @@ func Test_CreateCertificate_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset()
 	expectedError := fmt.Errorf("test error during list Certificate")
 	cert_client.Fake.PrependReactor("create", "certificates",
@@ -236,7 +236,7 @@ func Test_CreateCertificate_Error(t *testing.T) {
 func Test_UpdateOrCreateCertificate_CreateNew_success(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset()
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8s_client, CertmanagerInterface: cert_client})
 
@@ -266,7 +266,7 @@ func Test_UpdateOrCreateCertificate_Update_success(t *testing.T) {
 			SecretName: "secret-name",
 		},
 	}
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset(&certificateForClientSet)
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8s_client, CertmanagerInterface: cert_client})
 	certificate := entity.Certificate{
@@ -295,7 +295,7 @@ func Test_DeleteCertificate_Success(t *testing.T) {
 		},
 		Spec: v1.CertificateSpec{},
 	}
-	k8s_client := fake_k8s.NewSimpleClientset()
+	k8s_client := fake_k8s.NewClientset()
 	cert_client := fake_cert.NewSimpleClientset(&certificate)
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: k8s_client, CertmanagerInterface: cert_client})
 

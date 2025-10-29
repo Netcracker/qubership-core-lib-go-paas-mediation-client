@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
+	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/backend"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ func getTestRepController() corev1.ReplicationController {
 }
 
 func getTestPodsList() []corev1.Pod {
-	testPods := []corev1.Pod{}
+	var testPods []corev1.Pod
 	testPods = append(testPods, corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: testReplicaSet + "pod1",
 			Namespace: testNamespace1}, Spec: corev1.PodSpec{ServiceAccountName: "build-robot"},
@@ -62,7 +63,7 @@ func Test_GetPod_success(t *testing.T) {
 	namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	podForClientSet := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: testPod, Namespace: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &podForClientSet)
+	clientset := fake.NewClientset(&namespace, &podForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	pod, err := kube.GetPod(ctx, testPod, testNamespace1)
@@ -76,7 +77,7 @@ func Test_GetPodsList_Success(t *testing.T) {
 	ctx := context.Background()
 	testPods := getTestPodsList()
 
-	clientset := fake.NewSimpleClientset(&testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 
 	kube, err := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
@@ -90,7 +91,7 @@ func Test_getReplicaSet_appsV1Client_success(t *testing.T) {
 	ctx := context.Background()
 	testReplica := getTestReplicaAppsV1()
 
-	clientset := fake.NewSimpleClientset(&testReplica)
+	clientset := fake.NewClientset(&testReplica)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -105,7 +106,7 @@ func Test_getReplicaSet_extensionV1Client_success(t *testing.T) {
 	ctx := context.Background()
 	testReplica := getTestReplicaExtensionV1beta1()
 
-	clientset := fake.NewSimpleClientset(&testReplica)
+	clientset := fake.NewClientset(&testReplica)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -117,7 +118,7 @@ func Test_getReplicaSet_extensionV1Client_success(t *testing.T) {
 }
 
 func Test_getReplicaSetList_appsV1Client_success(t *testing.T) {
-	testReplicaSetList := []v1.ReplicaSet{}
+	var testReplicaSetList []v1.ReplicaSet
 	testReplicaSetList = append(testReplicaSetList, v1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "set1",
 			Namespace: testNamespace1},
@@ -127,7 +128,7 @@ func Test_getReplicaSetList_appsV1Client_success(t *testing.T) {
 		Spec: v1.ReplicaSetSpec{}})
 
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&testReplicaSetList[0], &testReplicaSetList[1])
+	clientset := fake.NewClientset(&testReplicaSetList[0], &testReplicaSetList[1])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -144,7 +145,7 @@ func Test_getReplicaSetList_extensionV1Client_success(t *testing.T) {
 		Spec: v1beta1.ReplicaSetSpec{}}
 
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&testReplicaSet)
+	clientset := fake.NewClientset(&testReplicaSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -156,7 +157,7 @@ func Test_getReplicaSetList_extensionV1Client_success(t *testing.T) {
 
 func Test_getLatestReplicaSet_appsV1Client_success(t *testing.T) {
 	desiredResultVersion := "5"
-	testReplicaSetList := []v1.ReplicaSet{}
+	var testReplicaSetList []v1.ReplicaSet
 	testReplicaSetList = append(testReplicaSetList,
 		v1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{Name: testDeploymentName + "set1",
@@ -170,7 +171,7 @@ func Test_getLatestReplicaSet_appsV1Client_success(t *testing.T) {
 			Spec: v1.ReplicaSetSpec{}})
 
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&testReplicaSetList[0], &testReplicaSetList[1])
+	clientset := fake.NewClientset(&testReplicaSetList[0], &testReplicaSetList[1])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -183,7 +184,7 @@ func Test_getLatestReplicaSet_appsV1Client_success(t *testing.T) {
 func Test_readyReplicasPods_success(t *testing.T) {
 	testPods := getTestPodsList()
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -198,7 +199,7 @@ func Test_podReplicationControllerIsReady_success(t *testing.T) {
 	ctx := context.Background()
 	testRepController := getTestRepController()
 
-	clientset := fake.NewSimpleClientset(&testRepController, &testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testRepController, &testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -213,7 +214,7 @@ func Test_podReplicationControllerIsReady_failure(t *testing.T) {
 	testRepController := corev1.ReplicationController{ObjectMeta: metav1.ObjectMeta{Name: testReplicaSet,
 		Namespace: testNamespace1, Annotations: map[string]string{"kubectl.kubernetes.io/desired-replicas": "3"}}}
 
-	clientset := fake.NewSimpleClientset(&testRepController, &testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testRepController, &testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -226,7 +227,7 @@ func Test_podReplicaSetIsReady_appsv1client_success(t *testing.T) {
 	testPods := getTestPodsList()
 	ctx := context.Background()
 	testReplica := getTestReplicaAppsV1()
-	clientset := fake.NewSimpleClientset(&testReplica, &testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testReplica, &testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	replicaSet, err := kube.podReplicaSetIsReady(ctx, testNamespace1, testReplicaSet, testPods, appsV1Client)
@@ -248,7 +249,7 @@ func Test_allPodsAreReady_appsV1client_success(t *testing.T) {
 	testReplica := getTestReplicaAppsV1()
 
 	replicasMap := replicasMapInit()
-	clientset := fake.NewSimpleClientset(&testRepController, &testReplica, &testPods)
+	clientset := fake.NewClientset(&testRepController, &testReplica, &testPods)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	mapPod, err := kube.allPodsAreReady(ctx, testNamespace1, replicasMap, appsV1Client)
@@ -261,7 +262,7 @@ func Test_allPodsAreReady_appsV1client_failure(t *testing.T) {
 	ctx := context.Background()
 	testRepController := getTestRepController()
 	testReplica := getTestReplicaAppsV1()
-	clientset := fake.NewSimpleClientset(&testRepController, &testReplica, &testPods[0], &testPods[1], &testPods[2])
+	clientset := fake.NewClientset(&testRepController, &testReplica, &testPods[0], &testPods[1], &testPods[2])
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	replicasMap := replicasMapInit()
@@ -289,7 +290,7 @@ func Test_RolloutDeployment_appsV1_success(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(&testDeployment, &replica1)
+	clientset := fake.NewClientset(&testDeployment, &replica1)
 	cert_client := &certClient.Clientset{}
 	clientset.Fake.PrependReactor("patch", "*",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
@@ -329,7 +330,7 @@ func Test_RolloutDeployment_extensionV1_success(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(&testDeployment, &replica1)
+	clientset := fake.NewClientset(&testDeployment, &replica1)
 	cert_client := &certClient.Clientset{}
 	clientset.Fake.PrependReactor("patch", "*",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
@@ -364,7 +365,7 @@ func Test_RolloutDeployments(t *testing.T) {
 		Spec: v1beta1.DeploymentSpec{},
 	}
 
-	clientset := fake.NewSimpleClientset(&testDeployment, &replica1)
+	clientset := fake.NewClientset(&testDeployment, &replica1)
 	cert_client := &certClient.Clientset{}
 	clientset.Fake.PrependReactor("patch", "deployments",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
@@ -386,4 +387,62 @@ func Test_RolloutDeployments(t *testing.T) {
 	assert.Equal(t, testDeploymentName+"-set1", firstDeployment.Active)
 	assert.Equal(t, testDeploymentName+"-set2", firstDeployment.Rolling)
 	assert.Equal(t, "ReplicaSet", firstDeployment.Kind)
+}
+
+func TestCorrectPod(t *testing.T) {
+	tests := []struct {
+		name        string
+		podName     string
+		replicasMap map[string][]string
+		want        bool
+	}{
+		{
+			name:    "matches exact replica prefix",
+			podName: "frontend-abc123",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend"},
+			},
+			want: true,
+		},
+		{
+			name:    "matches one of multiple prefixes",
+			podName: "backend-v2-xyz",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend", "backend-v2"},
+			},
+			want: true,
+		},
+		{
+			name:    "no match for pod name",
+			podName: "unrelated-pod",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend", "backend-v2"},
+			},
+			want: false,
+		},
+		{
+			name:        "empty replicas map",
+			podName:     "something",
+			replicasMap: map[string][]string{},
+			want:        false,
+		},
+		{
+			name:    "pod name shorter than prefix",
+			podName: "front",
+			replicasMap: map[string][]string{
+				"frontend": {"frontend"},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &entity.Pod{Metadata: entity.Metadata{Name: tt.podName}}
+			got := correctPod(pod, tt.replicasMap)
+			if got != tt.want {
+				t.Errorf("correctPod(%q) = %v, want %v", tt.podName, got, tt.want)
+			}
+		})
+	}
 }

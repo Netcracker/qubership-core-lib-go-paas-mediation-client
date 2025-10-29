@@ -25,11 +25,11 @@ import (
 )
 
 func getClients() (routev1client.RouteV1Interface, *openshiftappsfake.Clientset, *kube.Kubernetes) {
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	appsV1Client := openshiftappsfake.NewSimpleClientset()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	appsV1Client := openshiftappsfake.NewClientset()
 	return routeV1Client, appsV1Client, kubeClient
 }
 
@@ -44,7 +44,7 @@ func Test_GetNamespaces_cache_nil_success(t *testing.T) {
 	ctx := context.Background()
 
 	routeV1Client, appsV1Client, kubeClient := getClients()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset(getTestProjects()).ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset(getTestProjects()).ProjectV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client.AppsV1(), kubeClient)
 	namespaces, err := os.GetNamespaces(ctx, filter.Meta{})
@@ -59,7 +59,7 @@ func Test_GetNamespaces_cache_nil_failure(t *testing.T) {
 
 	routeV1Client, appsV1Client, kubeClient := getClients()
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset()
+	projectV1Client := openshiftprojectfake.NewClientset()
 	expectedError := fmt.Errorf("test error during list Projects")
 	projectV1Client.Fake.PrependReactor("list", "projects",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
@@ -79,7 +79,7 @@ func Test_GetNamespaces_cache_and_projects_notNil_success(t *testing.T) {
 	routeV1Client, appsV1Client, kubeClient := getClients()
 	kubeClient.Cache = cache.NewTestResourcesCache()
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset(getTestProjects()).ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset(getTestProjects()).ProjectV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client.AppsV1(), kubeClient)
 	namespaces, err := os.GetNamespaces(ctx, filter.Meta{})
@@ -96,7 +96,7 @@ func Test_GetNamespaces_cache_NotNil_projects_Nil_error(t *testing.T) {
 
 	kubeClient.Cache = cache.NewTestResourcesCache()
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset()
+	projectV1Client := openshiftprojectfake.NewClientset()
 
 	expectedError := fmt.Errorf("test error during list Projects")
 	projectV1Client.Fake.PrependReactor("list", "projects",

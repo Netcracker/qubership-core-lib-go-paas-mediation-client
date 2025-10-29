@@ -27,7 +27,7 @@ func Test_UpdateOrCreateSecret_CreateNew_success(t *testing.T) {
 	ctx := context.Background()
 	secret := entity.Secret{Metadata: entity.Metadata{Name: testSecret, Namespace: testNamespace1},
 		Data: map[string][]byte{"body": {102, 97, 108, 99, 111, 110}}}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	updatedSecret, err := kube.UpdateOrCreateSecret(ctx, &secret, testNamespace1)
@@ -40,7 +40,7 @@ func Test_UpdateOrCreateSecret_Update_success(t *testing.T) {
 	secretForClientSet := v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testSecret, Namespace: testNamespace1},
 		Data: map[string][]byte{"body": {15, 11, 10}}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &secretForClientSet)
+	clientset := fake.NewClientset(&namespace, &secretForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	secret := entity.Secret{Metadata: entity.Metadata{Name: testSecret, Namespace: testNamespace1},
@@ -56,7 +56,7 @@ func Test_DeleteSecret_success(t *testing.T) {
 	secretForClientSet := v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testSecret, Namespace: testNamespace1},
 		Data: map[string][]byte{"body": {15, 11, 10}}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &secretForClientSet)
+	clientset := fake.NewClientset(&namespace, &secretForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	err := kube.DeleteSecret(ctx, testSecret, testNamespace1)
@@ -68,7 +68,7 @@ func Test_GetSecret_success(t *testing.T) {
 	secretForClientSet := v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testSecret, Namespace: testNamespace1},
 		Data: map[string][]byte{"body": {15, 11, 10}}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &secretForClientSet)
+	clientset := fake.NewClientset(&namespace, &secretForClientSet)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	secret, err := kube.GetSecret(ctx, testSecret, testNamespace1)
@@ -82,7 +82,7 @@ func Test_GetSecret_usingCache_success(t *testing.T) {
 	secretTest := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: testSecret, Namespace: testNamespace1},
 		Data: map[string][]byte{"body": {15, 11, 10}}}
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	clientset.Discovery().(*fakediscovery.FakeDiscovery).FakedServerVersion = &version.Info{GitVersion: "v1.23.0"}
 	clientset.PrependReactor("get", "secrets", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
@@ -112,7 +112,7 @@ func Test_GetSecretWithServiceAccountToken_kuber1_23(t *testing.T) {
 		Secrets:    []v1.ObjectReference{{Name: testServiceAccount + "-token"}},
 	}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &secretForClientSet, &serviceAccount)
+	clientset := fake.NewClientset(&namespace, &secretForClientSet, &serviceAccount)
 	cert_client := &certClient.Clientset{}
 	fakeDiscoveryClient := clientset.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &version.Info{GitVersion: "v1.23.0"}
@@ -131,7 +131,7 @@ func Test_GetSecretWithServiceAccountToken_kuber1_24(t *testing.T) {
 		Data: map[string][]byte{"token": []byte("data")},
 		Type: SecretTypeServiceAccountTokenAnnotation}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace, &secretForClientSet)
+	clientset := fake.NewClientset(&namespace, &secretForClientSet)
 	cert_client := &certClient.Clientset{}
 	fakeDiscoveryClient := clientset.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &version.Info{GitVersion: "v1.24.0"}
@@ -145,7 +145,7 @@ func Test_GetSecretWithServiceAccountToken_kuber1_24(t *testing.T) {
 func Test_GetSecretWithServiceAccountToken_kuber1_24_SecretNotPresent(t *testing.T) {
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	fakeDiscoveryClient := clientset.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &version.Info{GitVersion: "v1.24.0"}

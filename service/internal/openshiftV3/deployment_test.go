@@ -30,17 +30,17 @@ func Test_GetDeployment_Success(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: testNamespace},
 		Spec:       v1.DeploymentSpec{},
 	}
-	kubeClientSet := fake.NewSimpleClientset(&deployment)
+	kubeClientSet := fake.NewClientset(&deployment)
 	certClientSet := fake_cert.NewSimpleClientset()
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
 	osDeployment := openshiftappsv1.DeploymentConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-deploymentConfig", Namespace: testNamespace},
 	}
-	appsV1Client := openshiftappsfake.NewSimpleClientset(&osDeployment).AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset(&osDeployment).AppsV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
@@ -63,14 +63,14 @@ func Test_GetDeployment_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset()
+	appsV1Client := openshiftappsfake.NewClientset()
 	expectedError := fmt.Errorf("test error during list Deployment")
 	appsV1Client.Fake.PrependReactor("get", "deploymentconfigs",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
@@ -120,12 +120,12 @@ func Test_GetDeploymentList_Success(t *testing.T) {
 		Spec: v1.DeploymentSpec{},
 	}
 
-	kubeClientSet := fake.NewSimpleClientset(&kubeDeployment1, &kubeDeployment2)
+	kubeClientSet := fake.NewClientset(&kubeDeployment1, &kubeDeployment2)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
 	osDeployment1Labels := make(map[string]string)
 	osDeployment1Labels["app-name"] = "name3"
@@ -152,7 +152,7 @@ func Test_GetDeploymentList_Success(t *testing.T) {
 		},
 	}
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset(&osDeployment1, &osDeployment2).AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset(&osDeployment1, &osDeployment2).AppsV1()
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
 	filter1Labels := make(map[string]string)
@@ -183,14 +183,14 @@ func Test_GetDeploymentList_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset()
+	appsV1Client := openshiftappsfake.NewClientset()
 	expectedError := fmt.Errorf("test error during list Deployment")
 	appsV1Client.Fake.PrependReactor("list", "deploymentconfigs",
 		func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {

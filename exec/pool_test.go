@@ -3,13 +3,14 @@ package exec
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 	//"math/rand"
 )
 
@@ -151,4 +152,18 @@ func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true // timed out
 	}
+}
+
+func TestPool_IsRunning(t *testing.T) {
+	r := require.New(t)
+
+	pool := NewFixedPool[string](2, 4)
+	defer pool.Stop()
+
+	fixedPool := pool.(*fixedSizePool[string])
+
+	r.True(fixedPool.IsRunning())
+
+	pool.Stop()
+	r.False(fixedPool.IsRunning())
 }

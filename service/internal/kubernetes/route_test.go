@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"testing"
-	"time"
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
@@ -85,7 +83,7 @@ func GetIngress(ingressJson map[string]any) v1beta1.Ingress {
 func Test_CreateRoute_success(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	routeToCreate, resourcesCache := getVariables()
@@ -98,7 +96,7 @@ func Test_CreateRoute_success(t *testing.T) {
 func Test_CreateRoute_UseNetworkingV1Ingress_success(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
@@ -113,7 +111,7 @@ func Test_DeleteRoute_Success(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	route := v1beta1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: testIngress, Namespace: testNamespace1}}
-	kubeClientSet := fake.NewSimpleClientset(&route)
+	kubeClientSet := fake.NewClientset(&route)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
@@ -124,7 +122,7 @@ func Test_DeleteRoute_UseNetworkingV1Ingress_Success(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	route := v1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: testIngress, Namespace: testNamespace1}}
-	kubeClientSet := fake.NewSimpleClientset(&route)
+	kubeClientSet := fake.NewClientset(&route)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
@@ -137,7 +135,7 @@ func Test_UpdateOrCreateRoute_Create_Success(t *testing.T) {
 	ctx := context.Background()
 	routeToCreate := &entity.Route{Metadata: entity.Metadata{Name: testIngress, Namespace: testNamespace1},
 		Spec: entity.RouteSpec{Host: "local"}}
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	route, err := kubeClient.UpdateOrCreateRoute(ctx, routeToCreate, testNamespace1)
@@ -167,7 +165,7 @@ func Test_CreateRoute_Success(t *testing.T) {
 	)
 
 	routeIngress := entity.RouteFromIngress(&ingress)
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	route, err := kubeClient.CreateRoute(ctx, routeIngress, testNamespace1)
@@ -182,7 +180,7 @@ func Test_UpdateOrCreateRoute_Create_UseNetworkingV1Ingress_Success(t *testing.T
 	ingress := getNetworkingIngress()
 	routeIngress := entity.RouteFromIngressNetworkingV1(&ingress)
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
@@ -203,7 +201,7 @@ func Test_UpdateOrCreateRoute_Update_UseNetworkingV1Ingress_Success(t *testing.T
 
 	routeIngress.Spec.Port.TargetPort = int32(30)
 
-	kubeClientSet := fake.NewSimpleClientset(&ingress)
+	kubeClientSet := fake.NewClientset(&ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
@@ -246,7 +244,7 @@ func Test_UpdateOrCreateRoute_Update_Success(t *testing.T) {
 
 	routeIngress.Spec.Port.TargetPort = int32(30)
 
-	kubeClientSet := fake.NewSimpleClientset(&ingress)
+	kubeClientSet := fake.NewClientset(&ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
@@ -283,7 +281,7 @@ func Test_GetRoute_Success(t *testing.T) {
 							"servicePort": "8080",
 						}}}}}}}},
 	)
-	kubeClientSet := fake.NewSimpleClientset(&ingress)
+	kubeClientSet := fake.NewClientset(&ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
@@ -304,7 +302,7 @@ func Test_GetRouteFromCache_UseNetworkingV1Ingress_Success(t *testing.T) {
 
 	ingress := getNetworkingIngress()
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	kubeClientSet.Discovery().(*fakediscovery.FakeDiscovery).FakedServerVersion = &version.Info{GitVersion: "v1.23.0"}
 	kubeClientSet.PrependReactor("get", "ingresses", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
@@ -347,10 +345,10 @@ func Test_CreateRouteBG2_Enabled(t *testing.T) {
 	)
 
 	routeIngress := entity.RouteFromIngress(&ingress)
-	kubeClientSet := fake.NewSimpleClientset()
-	cert_client := &certClient.Clientset{}
+	kubeClientSet := fake.NewClientset()
+	certManager := &certClient.Clientset{}
 	kubeClient, err := NewKubernetesClientBuilder().
-		WithClient(&backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client}).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certManager}).
 		WithNamespace(testNamespace1).
 		WithBG2Enabled(func() bool {
 			return true
@@ -360,20 +358,4 @@ func Test_CreateRouteBG2_Enabled(t *testing.T) {
 	route, err := kubeClient.CreateRoute(ctx, routeIngress, testNamespace1)
 	assertions.Nil(err)
 	assertions.NotNil(route)
-}
-
-func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	timer := time.NewTimer(timeout)
-	select {
-	case <-c:
-		timer.Stop()
-		return true // completed normally
-	case <-timer.C:
-		return false // timed out
-	}
 }

@@ -238,7 +238,7 @@ func createTestClient(resType string, objects ...runtime.Object) *backend.Kubern
 	switch resType {
 	case "service", "pod", "route", "configmap", "secret":
 		return &backend.KubernetesApi{
-			KubernetesInterface: fake.NewSimpleClientset(objects...),
+			KubernetesInterface: fake.NewClientset(objects...),
 		}
 	case "certificate":
 		return &backend.KubernetesApi{
@@ -296,7 +296,7 @@ func createTestCertificate(name string, namespace string, labels map[string]stri
 func Test_getKubernetesClientVersion_appsV1Client_success(t *testing.T) {
 	r := require.New(t)
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 	res, err := kube.getKubernetesClientVersion(testNamespace1)
@@ -308,7 +308,7 @@ func Test_getKubernetesVersion_success(t *testing.T) {
 	r := require.New(t)
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	fakeVersion := version.Info{GitVersion: kubernetesVersion}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	fakeDiscoveryClient := clientset.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &fakeVersion
@@ -348,7 +348,7 @@ func Test_WithoutCache(t *testing.T) {
 	assertions := require.New(t)
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
 	fakeVersion := version.Info{GitVersion: kubernetesVersion}
-	clientset := fake.NewSimpleClientset(&namespace)
+	clientset := fake.NewClientset(&namespace)
 	cert_client := &certClient.Clientset{}
 	fakeDiscoveryClient := clientset.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDiscoveryClient.FakedServerVersion = &fakeVersion
@@ -415,7 +415,7 @@ func Test_GetHttpRouteList_success(t *testing.T) {
 	}
 
 	gwClient := gatewayclientfake.NewSimpleClientset(hr1, hr2)
-	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
 		Cache: cache.NewTestResourcesCache(cache.HttpRouteCache)}
 
 	list, err := kube.GetHttpRouteList(context.Background(), ns, filter.Meta{})
@@ -438,7 +438,7 @@ func Test_GetGrpcRouteList_success(t *testing.T) {
 	}
 
 	gwClient := gatewayclientfake.NewSimpleClientset(gr1, gr2)
-	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewSimpleClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
+	kube := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: fake.NewClientset(), CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient},
 		Cache: cache.NewTestResourcesCache(cache.GrpcRouteCache)}
 
 	list, err := kube.GetGrpcRouteList(context.Background(), ns, filter.Meta{})
