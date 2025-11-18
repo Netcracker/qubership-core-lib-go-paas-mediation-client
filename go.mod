@@ -7,9 +7,9 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.1.0
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.1.0
-	github.com/netcracker/qubership-core-lib-go/v3 v3.2.0
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.1.1
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.1.1
+	github.com/netcracker/qubership-core-lib-go/v3 v3.2.1
 	github.com/openshift/api v0.0.0-20250919002755-a966b57583fb
 	github.com/openshift/client-go v0.0.0-20250915125341-81c9dc83a675
 	github.com/smarty/assertions v1.16.0
@@ -82,7 +82,7 @@ require (
 	golang.org/x/exp v0.0.0-20250808145144-a408d31f581a // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
