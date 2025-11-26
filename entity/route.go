@@ -152,7 +152,7 @@ func RouteFromIngressNetworkingV1(ingress *networkingV1.Ingress) *Route {
 }
 
 func RouteListFromIngressList(ingressList []*v1beta1.Ingress) ([]Route, map[string]struct{}) {
-	badRouteList := make(map[string]struct{}, 0)
+	badRouteList := make(map[string]struct{})
 	result := make([]Route, 0)
 	for _, srcIngress := range ingressList {
 		route := RouteFromIngress(srcIngress)
@@ -166,7 +166,7 @@ func RouteListFromIngressList(ingressList []*v1beta1.Ingress) ([]Route, map[stri
 }
 
 func RouteListFromIngressListNetworkingV1(ingressList []*networkingV1.Ingress) ([]Route, map[string]struct{}) {
-	badRouteList := make(map[string]struct{}, 0)
+	badRouteList := make(map[string]struct{})
 	result := make([]Route, 0)
 	for _, srcIngress := range ingressList {
 		route := RouteFromIngressNetworkingV1(srcIngress)
@@ -205,7 +205,7 @@ func RouteFromOsRoute(route *v1.Route) *Route {
 }
 
 func RouteListFromOsRouteList(osRouteList []*v1.Route) ([]Route, map[string]bool) {
-	badRouteList := make(map[string]bool, 0)
+	badRouteList := make(map[string]bool)
 	result := make([]Route, 0)
 	for _, osRoute := range osRouteList {
 		route := RouteFromOsRoute(osRoute)

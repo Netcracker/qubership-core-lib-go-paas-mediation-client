@@ -37,7 +37,7 @@ func Test_GetDeploymentFamilyVersions_Success(t *testing.T) {
 		},
 		Spec: v1.DeploymentSpec{}}
 
-	clientset := fake.NewSimpleClientset(&deployment)
+	clientset := fake.NewClientset(&deployment)
 	cert_client := &certClient.Clientset{}
 	kube, err := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client})
 
@@ -61,7 +61,7 @@ func Test_GetDeploymentFamilyVersions_Error(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	expectedError := fmt.Errorf("test error during list Deployment")
 	clientset.Fake.PrependReactor("list", "deployments",

@@ -24,7 +24,7 @@ func TestKubernetes_GetNamespace(t *testing.T) {
 	namespace1 := v1.Namespace{ObjectMeta: metaV1.ObjectMeta{Name: testNamespace1}}
 	expectedNamespace1 := entity.NewNamespace(&namespace1)
 	ctx := context.Background()
-	clientSet := fake.NewSimpleClientset(&namespace1)
+	clientSet := fake.NewClientset(&namespace1)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientSet, CertmanagerInterface: cert_client})
 	res, err := kube.GetNamespace(ctx, testNamespace1)
@@ -38,7 +38,7 @@ func TestKubernetes_GetNamespaceErr(t *testing.T) {
 	namespace1 := v1.Namespace{ObjectMeta: metaV1.ObjectMeta{Name: testNamespace1, Namespace: testNamespace1}}
 	expectedNamespace1 := entity.NewNamespace(&namespace1)
 	ctx := context.Background()
-	clientSet := fake.NewSimpleClientset(&namespace1)
+	clientSet := fake.NewClientset(&namespace1)
 	expectedError := paasErrors.StatusError{ErrStatus: metaV1.Status{Reason: metaV1.StatusFailure}}
 	clientSet.Fake.PrependReactor("get", "namespaces",
 		func(action kubeTest.Action) (handled bool, ret runtime.Object, err error) {
@@ -59,7 +59,7 @@ func TestKubernetes_GetNamespaces(t *testing.T) {
 	expectedNamespace1 := entity.NewNamespace(&namespace1)
 	expectedNamespace2 := entity.NewNamespace(&namespace2)
 	ctx := context.Background()
-	clientSet := fake.NewSimpleClientset(&namespace1, &namespace2)
+	clientSet := fake.NewClientset(&namespace1, &namespace2)
 	cert_client := &certClient.Clientset{}
 	kube, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: clientSet, CertmanagerInterface: cert_client})
 	res, err := kube.GetNamespaces(ctx, filter.Meta{})
@@ -77,7 +77,7 @@ func TestKubernetes_GetNamespacesForbiddenError(t *testing.T) {
 	expectedNamespace1 := entity.NewNamespace(&namespace1)
 	expectedError := paasErrors.StatusError{ErrStatus: metaV1.Status{Reason: metaV1.StatusReasonForbidden}}
 	ctx := context.Background()
-	clientSet := fake.NewSimpleClientset(&namespace1, &namespace2)
+	clientSet := fake.NewClientset(&namespace1, &namespace2)
 	clientSet.Fake.PrependReactor("list", "namespaces",
 		func(action kubeTest.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, &expectedError
@@ -99,7 +99,7 @@ func TestKubernetes_GetNamespacesForbiddenError_And_GetNamespaceError(t *testing
 	expectedError1 := paasErrors.StatusError{ErrStatus: metaV1.Status{Reason: metaV1.StatusReasonForbidden}}
 	expectedError2 := fmt.Errorf("error on get namespace")
 	ctx := context.Background()
-	clientSet := fake.NewSimpleClientset(&namespace1, &namespace2)
+	clientSet := fake.NewClientset(&namespace1, &namespace2)
 	clientSet.Fake.PrependReactor("list", "namespaces",
 		func(action kubeTest.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, &expectedError1

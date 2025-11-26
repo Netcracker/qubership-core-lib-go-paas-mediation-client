@@ -1,12 +1,13 @@
 package entity
 
 import (
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
-	"time"
 )
 
 func Test_PodStatusFromOsPodStatus(t *testing.T) {
@@ -63,4 +64,72 @@ func Test_PodSpecFromOsPodSpec(t *testing.T) {
 	assert.Equal(t, podSpecV1.NodeName, podSpecTest.NodeName)
 	assert.Equal(t, podSpecV1.Containers[0].Resources.Limits.Cpu().String(),
 		podSpecTest.Containers[0].Resources.Limits.Cpu)
+}
+
+func Test_PodFromOsPod(t *testing.T) {
+	podV1 := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-namespace",
+			Labels: map[string]string{
+				"app": "test-app",
+			},
+		},
+		Spec: v1.PodSpec{
+			NodeName: "test-node",
+		},
+		Status: v1.PodStatus{
+			Phase: "Running",
+			PodIP: "10.0.0.1",
+		},
+	}
+
+	pod := PodFromOsPod(podV1)
+
+	assert.NotNil(t, pod)
+	assert.Equal(t, "test-pod", pod.Name)
+	assert.Equal(t, "test-namespace", pod.Namespace)
+	assert.Equal(t, "test-app", pod.Labels["app"])
+	assert.Equal(t, "test-node", pod.Spec.NodeName)
+	assert.Equal(t, "Running", pod.Status.Phase)
+	assert.Equal(t, "10.0.0.1", pod.Status.PodIP)
+}
+
+func Test_PodFromOsPod_NilInput(t *testing.T) {
+	assert.Panics(t, func() {
+		PodFromOsPod(nil)
+	})
+}
+
+func Test_NewPodList(t *testing.T) {
+	apiPods := []*v1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod1",
+				Namespace: "test-namespace",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod2",
+				Namespace: "test-namespace",
+			},
+		},
+	}
+
+	podList := NewPodList(apiPods)
+
+	assert.NotNil(t, podList)
+	assert.Equal(t, 2, len(podList))
+	assert.Equal(t, "pod1", podList[0].Name)
+	assert.Equal(t, "pod2", podList[1].Name)
+}
+
+func Test_NewPodList_EmptySlice(t *testing.T) {
+	apiPods := []*v1.Pod{}
+
+	podList := NewPodList(apiPods)
+
+	assert.Equal(t, 0, len(podList))
+	assert.Empty(t, podList)
 }

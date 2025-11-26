@@ -64,19 +64,19 @@ func Test_GetRoute_ExistsAsIngress(t *testing.T) {
 	ctx := context.Background()
 
 	ingress := getNetworkingIngress(testRoute)
-	kubeClientSet := fake.NewSimpleClientset(ingress)
+	kubeClientSet := fake.NewClientset(ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
 
-	routeClientset := openshiftroutefake.NewSimpleClientset()
+	routeClientset := openshiftroutefake.NewClientset()
 	routeClientset.PrependReactor("*", "*", func(action kube_test.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, errors.NewInternalError(fmt.Errorf("test api server error"))
 	})
 	routeV1Client := routeClientset.RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
@@ -93,7 +93,7 @@ func Test_ListRoutes_ExistAsBothRoutesAndIngresses(t *testing.T) {
 	ingress1 := getNetworkingIngress("test-route-1")
 	ingress2 := getNetworkingIngress("test-route-2")
 
-	kubeClientSet := fake.NewSimpleClientset(ingress1)
+	kubeClientSet := fake.NewClientset(ingress1)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
@@ -102,11 +102,11 @@ func Test_ListRoutes_ExistAsBothRoutesAndIngresses(t *testing.T) {
 	expectedRoute2 := entity.RouteFromIngressNetworkingV1(ingress2)
 	osRoute2 := expectedRoute2.ToOsRoute()
 
-	routeClientset := openshiftroutefake.NewSimpleClientset(osRoute2)
+	routeClientset := openshiftroutefake.NewClientset(osRoute2)
 	routeV1Client := routeClientset.RouteV1()
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
@@ -121,14 +121,14 @@ func Test_ListRoutes_ExistAsBothRoutesAndIngresses(t *testing.T) {
 func Test_UpdateOrCreateRoute_UpdateFromCache_success(t *testing.T) {
 	ctx := context.Background()
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
 	routeTest := openshift_v1.Route{ObjectMeta: metav1.ObjectMeta{Name: testRoute, Namespace: testNamespace}}
@@ -149,16 +149,16 @@ func Test_UpdateOrCreateRoute_UpdateFromCache_success(t *testing.T) {
 func Test_UpdateOrCreateRoute_Update_success(t *testing.T) {
 	ctx := context.Background()
 
-	kubeClientSet := fake.NewSimpleClientset()
+	kubeClientSet := fake.NewClientset()
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
 	routeTest := openshift_v1.Route{ObjectMeta: metav1.ObjectMeta{Name: testRoute, Namespace: testNamespace}}
-	routeV1Client := openshiftroutefake.NewSimpleClientset(&routeTest).RouteV1()
+	routeV1Client := openshiftroutefake.NewClientset(&routeTest).RouteV1()
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
 	routeUpdate := &entity.Route{Metadata: entity.Metadata{Name: testRoute, Namespace: testNamespace},
@@ -175,16 +175,16 @@ func Test_DeleteRoute_success(t *testing.T) {
 	ctx := context.Background()
 
 	ingress := getNetworkingIngress(testRoute)
-	kubeClientSet := fake.NewSimpleClientset(ingress)
+	kubeClientSet := fake.NewClientset(ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := kube.NewTestKubernetesClient(testNamespace, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
 	kubeClient.UseNetworkingV1Ingress = true
 
-	projectV1Client := openshiftprojectfake.NewSimpleClientset().ProjectV1()
+	projectV1Client := openshiftprojectfake.NewClientset().ProjectV1()
 
-	appsV1Client := openshiftappsfake.NewSimpleClientset().AppsV1()
+	appsV1Client := openshiftappsfake.NewClientset().AppsV1()
 
-	routeV1Client := openshiftroutefake.NewSimpleClientset().RouteV1()
+	routeV1Client := openshiftroutefake.NewClientset().RouteV1()
 	os := NewOpenshiftV3Client(routeV1Client, projectV1Client, appsV1Client, kubeClient)
 
 	err := os.DeleteRoute(ctx, testRoute, testNamespace)

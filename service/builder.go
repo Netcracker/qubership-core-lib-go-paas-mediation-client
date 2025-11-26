@@ -6,7 +6,7 @@ import (
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/exec"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/backend"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/internal/cache"
-	kubernetes "github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/internal/kubernetes"
+	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/internal/kubernetes"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/types"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/watch"
 )
