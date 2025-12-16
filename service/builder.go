@@ -54,8 +54,33 @@ func (builder PlatformClientBuilder) WithCacheSettings(numItems int64, maxSizeIn
 	return builder
 }
 
+// WithAllCaches enables all Kubernetes resource caches including Certificate, ConfigMap, Namespace, Route, Secret, Service, HttpRoute, and GrpcRoute caches.
+// Use carefully, HTTPRoute and GRPCRoute watching requires special RBAC permissions.
 func (builder PlatformClientBuilder) WithAllCaches() PlatformClientBuilder {
-	builder.caches[cache.AllCache] = struct{}{}
+	for _, cacheName := range cache.BasicCaches {
+		builder.caches[cacheName] = struct{}{}
+	}
+	for _, cacheName := range cache.GatewayApiRoutesCaches {
+		builder.caches[cacheName] = struct{}{}
+	}
+
+	return builder
+}
+
+// WithBasicCaches enables the basic Kubernetes resource caches including Certificate, ConfigMap, Namespace, Route, Secret, and Service caches.
+func (builder PlatformClientBuilder) WithBasicCaches() PlatformClientBuilder {
+	for _, cacheName := range cache.BasicCaches {
+		builder.caches[cacheName] = struct{}{}
+	}
+	return builder
+}
+
+// WithGatewayApiRoutesCaches enables the Gateway API route caches including HttpRoute and GrpcRoute caches.
+// Use carefully, HTTPRoute and GRPCRoute watching requires special RBAC permissions.
+func (builder PlatformClientBuilder) WithGatewayApiRoutesCaches() PlatformClientBuilder {
+	for _, cacheName := range cache.GatewayApiRoutesCaches {
+		builder.caches[cacheName] = struct{}{}
+	}
 	return builder
 }
 

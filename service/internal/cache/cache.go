@@ -68,32 +68,32 @@ func NewResourcesCache(numItems int64, maxSizeInBytes int64, maxItemSizeInBytes 
 	adapter := &ristrettoCacheAdapter{cache: ristrettoCache, ttl: ttl, maxItemSize: maxItemSizeInBytes}
 	resourceCache := &ResourcesCache{}
 	if len(cacheToEnable) == 0 {
-		cacheToEnable = append(cacheToEnable, AllCache)
+		cacheToEnable = append(cacheToEnable, BasicCaches...)
 	}
 	for _, cacheName := range cacheToEnable {
-		if cacheName == AllCache || cacheName == CertificateCache {
+		if cacheName == CertificateCache {
 			logger.Warn("Certificate cache is requested, but not supported yet") // todo figure out how to initate watch for certificates
 			//resourceCache.Certificates = NewResourceCache(&entity.Certificate{}, newEntityAdapter[entity.Certificate](adapter))
 		}
-		if cacheName == AllCache || cacheName == ConfigMapCache {
+		if cacheName == ConfigMapCache {
 			resourceCache.ConfigMaps = NewResourceCache(&entity.ConfigMap{}, newEntityAdapter[entity.ConfigMap](adapter))
 		}
-		if cacheName == AllCache || cacheName == RouteCache {
+		if cacheName == RouteCache {
 			resourceCache.Ingresses = NewResourceCache(&entity.Route{}, newEntityAdapter[entity.Route](adapter))
 		}
-		if cacheName == AllCache || cacheName == SecretCache {
+		if cacheName == SecretCache {
 			resourceCache.Secrets = NewResourceCache(&entity.Secret{}, newEntityAdapter[entity.Secret](adapter))
 		}
-		if cacheName == AllCache || cacheName == ServiceCache {
+		if cacheName == ServiceCache {
 			resourceCache.Services = NewResourceCache(&entity.Service{}, newEntityAdapter[entity.Service](adapter))
 		}
-		if cacheName == AllCache || cacheName == NamespaceCache {
+		if cacheName == NamespaceCache {
 			resourceCache.Namespaces = NewResourceCache(&entity.Namespace{}, newEntityAdapter[entity.Namespace](adapter))
 		}
-		if cacheName == AllCache || cacheName == HttpRouteCache {
+		if cacheName == HttpRouteCache {
 			resourceCache.HTTPRoute = NewResourceCache(&entity.HttpRoute{}, newEntityAdapter[entity.HttpRoute](adapter))
 		}
-		if cacheName == AllCache || cacheName == GrpcRouteCache {
+		if cacheName == GrpcRouteCache {
 			resourceCache.GRPCRoute = NewResourceCache(&entity.GrpcRoute{}, newEntityAdapter[entity.GrpcRoute](adapter))
 		}
 	}

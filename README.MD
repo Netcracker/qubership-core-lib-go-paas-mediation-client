@@ -41,11 +41,21 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
  3. Optionally turn on required cache
  4. invoke Build() method
 
-#### Create client with all type of caches enabled
+#### Create client with all type of basic caches enabled
+(Basic caches entites: Certificate, ConfigMap, Namespace, Route, Secret, Service)
 
 ```
-service.NewPlatformClientBuilder().WithAllCaches().Build()
+service.NewPlatformClientBuilder().WithBasicCaches().Build()
 ```
+
+#### Create client with all types of basic caches and [Gateway API](https://gateway-api.sigs.k8s.io/) route caches ([HTTPRoute](https://gateway-api.sigs.k8s.io/reference/spec/#httproute), [GRPCRoute](https://gateway-api.sigs.k8s.io/reference/spec/#grpcroute)) enabled
+
+> Ensure you have sufficient permissions to operate (`get`, `list`, `watch`) with `gateway.networking.k8s.io/v1` entities (`HTTPRoute`, `GRPCRoute`). 
+
+```
+service.NewPlatformClientBuilder().WithBasicCaches().WithGatewayApiRoutesCaches.Build()
+```
+
 
 #### Create client with cache for Service and ConfigMap only
 
@@ -66,7 +76,7 @@ By default, the value is 32, but custom value can be specified during client cre
 
 ```
 service.NewPlatformClientBuilder().
-		WithAllCaches().
+		WithBasicCaches().
 		WithRolloutParallelism(100).
 		Build()
 ```
@@ -74,7 +84,7 @@ service.NewPlatformClientBuilder().
 ##### Run rollout in parallel
 ```
 client, _ := service.NewPlatformClientBuilder().
-		WithAllCaches().
+		WithBasicCaches().
 		Build()
 
 ctx := context.Background()
@@ -85,7 +95,7 @@ platformService.RolloutDeploymentsInParallel(ctx, namespace, deploymentNames)
 ##### Run rollout sequentially
 ```
 client, _ := service.NewPlatformClientBuilder().
-		WithAllCaches().
+		WithBasicCaches().
 		Build()
 
 ctx := context.Background()
