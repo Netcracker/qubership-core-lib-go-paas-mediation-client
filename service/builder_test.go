@@ -355,6 +355,87 @@ func testServiceCache(t *testing.T, cache *cache.ResourcesCache) {
 	r.Nil(cache.ConfigMaps)
 }
 
+func TestPlatformClientBuilder_WithBasicCaches_k8s(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("kubernetes")
+	defer cleanUpEnv()
+	client, err := NewPlatformClientBuilder().WithBasicCaches().WithClients(prepareFakeClients()).WithWatchExecutor(getTestWatchExecutor(t)).Build()
+	r.Nil(err)
+	r.NotNil(client)
+	realClient := getK8sEntityFromClient(client)
+	r.NotNil(realClient)
+	testBasicCaches(t, realClient.Cache)
+}
+
+func TestPlatformClientBuilder_WithBasicCaches_Openshift311(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("openshift")
+	defer cleanUpEnv()
+	client, err := NewPlatformClientBuilder().WithBasicCaches().WithClients(prepareFakeClients()).WithWatchExecutor(getTestWatchExecutor(t)).Build()
+	r.Nil(err)
+	r.NotNil(client)
+	realClient := getOs311EntityFromClient(client)
+	r.NotNil(realClient)
+	r.NotNil(realClient.Kubernetes)
+	testBasicCaches(t, realClient.Kubernetes.Cache)
+}
+
+func TestPlatformClientBuilder_WithGatewayApiRoutesCaches_k8s(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("kubernetes")
+	defer cleanUpEnv()
+	client, err := NewPlatformClientBuilder().WithGatewayApiRoutesCaches().WithClients(prepareFakeClients()).WithWatchExecutor(getTestWatchExecutor(t)).Build()
+	r.Nil(err)
+	r.NotNil(client)
+	realClient := getK8sEntityFromClient(client)
+	r.NotNil(realClient)
+	testGatewayApiRoutesCaches(t, realClient.Cache)
+}
+
+func TestPlatformClientBuilder_WithGatewayApiRoutesCaches_Openshift311(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("openshift")
+	defer cleanUpEnv()
+	client, err := NewPlatformClientBuilder().WithGatewayApiRoutesCaches().WithClients(prepareFakeClients()).WithWatchExecutor(getTestWatchExecutor(t)).Build()
+	r.Nil(err)
+	r.NotNil(client)
+	realClient := getOs311EntityFromClient(client)
+	r.NotNil(realClient)
+	r.NotNil(realClient.Kubernetes)
+	testGatewayApiRoutesCaches(t, realClient.Kubernetes.Cache)
+}
+
+func testBasicCaches(t *testing.T, cache *cache.ResourcesCache) {
+	r := require.New(t)
+	r.NotNil(cache)
+	// Basic caches should include: Certificate, ConfigMap, Namespace, Route, Secret, Service
+	// Certificate cache is not supported yet, so it's nil
+	r.Nil(cache.Certificates) // todo Certificates cache not supported yet
+	r.NotNil(cache.ConfigMaps)
+	r.NotNil(cache.Namespaces)
+	r.NotNil(cache.Ingresses)
+	r.NotNil(cache.Secrets)
+	r.NotNil(cache.Services)
+	// Gateway API route caches should not be enabled
+	r.Nil(cache.HTTPRoute)
+	r.Nil(cache.GRPCRoute)
+}
+
+func testGatewayApiRoutesCaches(t *testing.T, cache *cache.ResourcesCache) {
+	r := require.New(t)
+	r.NotNil(cache)
+	// Gateway API route caches should include: HttpRoute, GrpcRoute
+	r.NotNil(cache.HTTPRoute)
+	r.NotNil(cache.GRPCRoute)
+	// Basic caches should not be enabled
+	r.Nil(cache.Certificates)
+	r.Nil(cache.ConfigMaps)
+	r.Nil(cache.Namespaces)
+	r.Nil(cache.Ingresses)
+	r.Nil(cache.Secrets)
+	r.Nil(cache.Services)
+}
+
 func prepareEnv(platform string) {
 	setPaasEnv(platform)
 	configloader.Init([]*configloader.PropertySource{configloader.EnvPropertySource()}...)
