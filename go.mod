@@ -3,7 +3,7 @@ module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 go 1.25.5
 
 require (
-	github.com/cert-manager/cert-manager v1.18.2
+	github.com/cert-manager/cert-manager v1.19.2
 	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
@@ -15,12 +15,12 @@ require (
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/mod v0.31.0
-	golang.org/x/net v0.48.0
-	k8s.io/api v0.33.5
-	k8s.io/apimachinery v0.33.5
-	k8s.io/client-go v0.33.5
-	sigs.k8s.io/gateway-api v1.1.0
+	golang.org/x/mod v0.32.0
+	golang.org/x/net v0.49.0
+	k8s.io/api v0.35.0
+	k8s.io/apimachinery v0.35.0
+	k8s.io/client-go v0.35.0
+	sigs.k8s.io/gateway-api v1.4.1
 )
 
 require (
