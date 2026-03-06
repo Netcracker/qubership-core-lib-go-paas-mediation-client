@@ -61,7 +61,7 @@ import (
 	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 	storagev1alpha1 "k8s.io/client-go/kubernetes/typed/storage/v1alpha1"
 	storagev1beta1 "k8s.io/client-go/kubernetes/typed/storage/v1beta1"
-	v1beta3 "k8s.io/client-go/kubernetes/typed/storagemigration/v1beta1"
+	storagemigrationv1beta1 "k8s.io/client-go/kubernetes/typed/storagemigration/v1beta1"
 	"k8s.io/client-go/testing"
 )
 
@@ -75,7 +75,7 @@ func (c *KubeClientset) ResourceV1() resourceV1.ResourceV1Interface {
 	panic("implement me")
 }
 
-func (c *KubeClientset) StoragemigrationV1beta1() v1beta3.StoragemigrationV1beta1Interface {
+func (c *KubeClientset) StoragemigrationV1beta1() storagemigrationv1beta1.StoragemigrationV1beta1Interface {
 	panic("implement me")
 }
 
