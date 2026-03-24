@@ -7,9 +7,9 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.5.2
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.4.2
-	github.com/netcracker/qubership-core-lib-go/v3 v3.7.1
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.5.3
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.4.3
+	github.com/netcracker/qubership-core-lib-go/v3 v3.7.2
 	github.com/openshift/api v0.0.0-20250919002755-a966b57583fb
 	github.com/openshift/client-go v0.0.0-20250915125341-81c9dc83a675
 	github.com/smarty/assertions v1.16.0
@@ -34,7 +34,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
@@ -44,7 +44,7 @@ require (
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/consul/api v1.33.2 // indirect
+	github.com/hashicorp/consul/api v1.33.5 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
@@ -56,12 +56,12 @@ require (
 	github.com/hashicorp/serf v0.10.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/knadh/koanf/parsers/yaml v1.0.0 // indirect
 	github.com/knadh/koanf/providers/env v1.1.0 // indirect
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
-	github.com/knadh/koanf/v2 v2.3.2 // indirect
+	github.com/knadh/koanf/v2 v2.3.4 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -79,13 +79,13 @@ require (
 	github.com/valyala/fasthttp v1.58.0 // indirect
 	github.com/viney-shih/go-lock v1.1.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/exp v0.0.0-20250808145144-a408d31f581a // indirect
+	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
