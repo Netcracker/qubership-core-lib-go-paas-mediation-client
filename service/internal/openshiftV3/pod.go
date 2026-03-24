@@ -44,11 +44,11 @@ func (os *OpenshiftV3Client) rolloutDeployments(ctx context.Context, namespace s
 	}
 	taskResults, err := executor.Submit(tasks)
 	if err != nil {
-		logger.ErrorC(ctx, err.Error())
+		logger.ErrorC(ctx, "%s", err.Error())
 		return nil, err
 	} else if taskResults.HasErrors() {
 		tErr := taskResults.GetAsError()
-		logger.ErrorC(ctx, tErr.Error())
+		logger.ErrorC(ctx, "%s", tErr.Error())
 		return nil, tErr
 	} else {
 		return entity.NewDeploymentResponse(taskResults.GetResults()), nil
@@ -60,7 +60,7 @@ func (os *OpenshiftV3Client) RolloutDeployment(ctx context.Context, deploymentCo
 	logger.DebugC(ctx, "Start define param=%s deployment or deploymentConfig in openshift", deploymentConfigName)
 	if deploymentConfigIsExist, errorDeploymentConfig := os.deploymentConfigIsExist(ctx, namespace, deploymentConfigName); !deploymentConfigIsExist {
 		if errorDeploymentConfig != nil {
-			logger.ErrorC(ctx, "Error while check DeploymentConfig is exist", errorDeploymentConfig)
+			logger.ErrorC(ctx, "Error while check DeploymentConfig is exist: %+v", errorDeploymentConfig)
 			return nil, errorDeploymentConfig
 		}
 		logger.DebugC(ctx, "Param=%s is not deployment config", deploymentConfigName)
@@ -73,7 +73,7 @@ func (os *OpenshiftV3Client) RolloutDeployment(ctx context.Context, deploymentCo
 	logger.DebugC(ctx, "Start get active replication controller deployment config=%s in openshift", deploymentConfigName)
 	activeReplicationController, errorDeploymentConfig := os.getLatestReplicationController(ctx, namespace, deploymentConfigName)
 	if errorDeploymentConfig != nil {
-		logger.ErrorC(ctx, "Error while getting lastVersion ReplicationController", errorDeploymentConfig)
+		logger.ErrorC(ctx, "Error while getting lastVersion ReplicationController: %+v", errorDeploymentConfig)
 		return nil, errorDeploymentConfig
 	}
 	logger.DebugC(ctx, "Active replication=%s in openshift", activeReplicationController)
@@ -90,14 +90,14 @@ func (os *OpenshiftV3Client) RolloutDeployment(ctx context.Context, deploymentCo
 			Body(&deploymentConfig.DeploymentRequest{Name: deploymentConfigName, Latest: true, Force: true}).
 			Do(ctx).Into(&result)
 		if errorOP1 != nil {
-			logger.ErrorC(ctx, "Error while restarting DeploymentConfig", errorDeploymentConfig)
+			logger.ErrorC(ctx, "Error while restarting DeploymentConfig: %+v", errorDeploymentConfig)
 			return nil, errorDeploymentConfig
 		}
 	}
 	logger.InfoC(ctx, "Success rollout deployment config=%s in openshift", deploymentConfigName)
 	rollingReplicationController, errorDeploymentConfig := os.getLatestReplicationController(ctx, namespace, deploymentConfigName)
 	if errorDeploymentConfig != nil {
-		logger.ErrorC(ctx, "Error while getting DeploymentConfig", errorDeploymentConfig)
+		logger.ErrorC(ctx, "Error while getting DeploymentConfig: %+v", errorDeploymentConfig)
 		return nil, errorDeploymentConfig
 	}
 

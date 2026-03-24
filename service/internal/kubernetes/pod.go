@@ -73,11 +73,11 @@ func (kube *Kubernetes) rolloutDeployments(ctx context.Context, namespace string
 	}
 	taskResults, err := executor.Submit(tasks)
 	if err != nil {
-		logger.ErrorC(ctx, err.Error())
+		logger.ErrorC(ctx, "%v", err.Error())
 		return nil, err
 	} else if taskResults.HasErrors() {
 		tErr := taskResults.GetAsError()
-		logger.ErrorC(ctx, tErr.Error())
+		logger.ErrorC(ctx, "%s", tErr.Error())
 		return nil, tErr
 	} else {
 		return entity.NewDeploymentResponse(taskResults.GetResults()), nil
@@ -160,7 +160,7 @@ func (kube *Kubernetes) getLatestReplicaSet(ctx context.Context, namespace strin
 		if strings.HasPrefix(currentReplicaSet.Name, deploymentName) {
 			replicaSetCurrentVersionNumber, err := strconv.Atoi(currentReplicaSet.CurrentVersion)
 			if err != nil {
-				logger.ErrorC(ctx, "Error while parsing string", err)
+				logger.ErrorC(ctx, "Error while parsing string: %+v", err)
 				return nil, err
 			}
 			if latestRevisionNumber < replicaSetCurrentVersionNumber {
@@ -274,14 +274,14 @@ func (kube *Kubernetes) allPodsAreReady(ctx context.Context, namespace string, r
 
 	podsList, err := kube.GetCoreV1Client().Pods(namespace).List(ctx, v1.ListOptions{})
 	if err != nil {
-		logger.ErrorC(ctx, "Error while get pods list", err)
+		logger.ErrorC(ctx, "Error while get pods list: %+v", err)
 		return nil, err
 	}
 	// todo next major change everywhere 'replication-controller' to 'replicationController'
 	for _, replicationControllerName := range replicasMap["replication-controller"] {
 		tmpReplicationController, err = kube.podReplicationControllerIsReady(ctx, namespace, replicationControllerName, podsList.Items)
 		if err != nil {
-			logger.ErrorC(ctx, "Error while check pod", err)
+			logger.ErrorC(ctx, "Error while check pod: %+v", err)
 			return nil, err
 		}
 		// todo what return nil, nil means? refactor this
@@ -295,7 +295,7 @@ func (kube *Kubernetes) allPodsAreReady(ctx context.Context, namespace string, r
 	for _, replicaSetName := range replicasMap["replica-set"] {
 		tmpReplicaSet, err = kube.podReplicaSetIsReady(ctx, namespace, replicaSetName, podsList.Items, clientVersionForKubernetes)
 		if err != nil {
-			logger.ErrorC(ctx, "Error while check pod", err)
+			logger.ErrorC(ctx, "Error while check pod: %+v", err)
 			return nil, err
 		}
 		// todo what return nil, nil means? refactor this
@@ -308,7 +308,7 @@ func (kube *Kubernetes) allPodsAreReady(ctx context.Context, namespace string, r
 	mapForStruct := make(map[string][]corev1.Pod)
 	reg, err := regexp.Compile(`-[^-]+?\z`)
 	if err != nil {
-		logger.ErrorC(ctx, "Error while compile regex", err)
+		logger.ErrorC(ctx, "Error while compile regex: %+v", err)
 		return nil, err
 	}
 	for _, replicaSet := range replicaSetList {
@@ -362,7 +362,7 @@ func (kube *Kubernetes) podReplicationControllerIsReady(ctx context.Context, nam
 	var desiredPods int
 	replicationController, err := kube.GetCoreV1Client().ReplicationControllers(namespace).Get(ctx, replicationControllerName, v1.GetOptions{})
 	if err != nil {
-		logger.ErrorC(ctx, "Error while geting replicationController", err)
+		logger.ErrorC(ctx, "Error while geting replicationController: %+v", err)
 		return nil, err
 	}
 	desiredReplicasString := replicationController.Annotations["kubectl.kubernetes.io/desired-replicas"]
@@ -378,7 +378,7 @@ func (kube *Kubernetes) podReplicationControllerIsReady(ctx context.Context, nam
 		return replicationController, nil
 	} else {
 		logger.InfoC(ctx, "replication controller=%s not ready", replicationControllerName)
-		logger.DebugC(ctx, "replication controller not ready", replicationController)
+		logger.DebugC(ctx, "replication controller not ready: %+v", replicationController)
 		return nil, nil
 	}
 }
@@ -387,7 +387,7 @@ func (kube *Kubernetes) readyReplicasPods(ctx context.Context, replicaSetName st
 	counter := 0
 	for _, pod := range podsList {
 		if strings.HasPrefix(pod.Name, replicaSetName) && pod.Spec.ServiceAccountName != "deployer" {
-			logger.DebugC(ctx, "pod status", pod)
+			logger.DebugC(ctx, "pod status: %+v", pod)
 			for _, condition := range pod.Status.Conditions {
 				if condition.Type == "Ready" {
 					if condition.Status == "True" {

@@ -146,7 +146,7 @@ func UpdateOrCreateWrapper[F any, T entity.HasMetadata](ctx context.Context, res
 		if k8sErrors.IsNotFound(err) {
 			return CreateWrapper(ctx, resource, createInApiServer, convertTo, convertFrom)
 		}
-		logger.ErrorC(ctx, "Error while get the resource with namespace: '%s', name: '%s' from the api server before update: %s", err.Error())
+		logger.ErrorC(ctx, "Error while get the resource with namespace: '%s', name: '%s' from the api server before update: %v", namespace, name, err.Error())
 		return nil, err
 	} else {
 		logger.DebugC(ctx, "Updating resource with namespace: '%s', name: '%s' in the api server", namespace, name)
