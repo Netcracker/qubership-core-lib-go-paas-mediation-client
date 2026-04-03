@@ -17,10 +17,10 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/mod v0.34.0
 	golang.org/x/net v0.52.0
-	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
-	k8s.io/client-go v0.35.2
-	sigs.k8s.io/gateway-api v1.5.0
+	k8s.io/api v0.35.3
+	k8s.io/apimachinery v0.35.3
+	k8s.io/client-go v0.35.3
+	sigs.k8s.io/gateway-api v1.5.1
 )
 
 require (
