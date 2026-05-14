@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
@@ -17,14 +18,45 @@ import (
 var BG2IngressClassName = "bg.mesh.netcracker.com"
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
+	useGatewayAPI := kube.shouldUseGatewayAPI()
+	useLegacyIngress := kube.shouldCreateLegacyIngress()
+
+	if !useGatewayAPI && !useLegacyIngress {
+		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route creation", kube.GatewaySystemType)
+	}
+
+	var result *entity.Route
+	var err error
+
+	if useGatewayAPI {
+		result, err = kube.createHTTPRoute(ctx, route, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
+		}
+		logger.InfoC(ctx, "HTTPRoute created: %s", route.Name)
+	}
+
+	if !useLegacyIngress {
+		return result, nil
+	}
+
 	if kube.UseNetworkingV1Ingress {
 		ingress := route.ToIngressNetworkingV1()
 		kube.modifyIngressClassForBG2(ingress)
+
+		if kube.shouldIgnoreIngressForConverter() {
+			if ingress.Annotations == nil {
+				ingress.Annotations = make(map[string]string)
+			}
+			ingress.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+		}
+
 		createdIngress, e := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
 		if e != nil {
 			logger.ErrorC(ctx, "Error to create ingress: %+v", e)
 			return nil, e
 		}
+		logger.InfoC(ctx, "Ingress created: %s", route.Name)
 		ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(createdIngress)
 		if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
 			_, e := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
@@ -36,11 +68,20 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 	} else {
 		ingress := route.ToIngress()
 		kube.modifyIngressClassForBG2(ingress)
+
+		if kube.shouldIgnoreIngressForConverter() {
+			if ingress.Annotations == nil {
+				ingress.Annotations = make(map[string]string)
+			}
+			ingress.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+		}
+
 		createdIngress, e := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
 		if e != nil {
 			logger.ErrorC(ctx, "Error to create ingress: %+v", e)
 			return nil, e
 		}
+		logger.InfoC(ctx, "Ingress created: %s", route.Name)
 		routeFromIngress := entity.RouteFromIngress(createdIngress)
 		if kube.Cache.Ingresses != nil && routeFromIngress != nil {
 			_, e := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
@@ -243,4 +284,50 @@ func (kube *Kubernetes) modifyIngressClassForBG2(ingress any) {
 			i.Spec.IngressClassName = &BG2IngressClassName
 		}
 	}
+}
+
+func (kube *Kubernetes) shouldUseGatewayAPI() bool {
+	if kube.GatewaySystemType == "" {
+		return false
+	}
+	return strings.Contains(kube.GatewaySystemType, "gateway-api-default")
+}
+
+func (kube *Kubernetes) shouldCreateLegacyIngress() bool {
+	if kube.GatewaySystemType == "" {
+		return true
+	}
+	return strings.Contains(kube.GatewaySystemType, "legacy-ingress")
+}
+
+func (kube *Kubernetes) shouldIgnoreIngressForConverter() bool {
+	if kube.GatewaySystemType == "" {
+		return false
+	}
+	return strings.Contains(kube.GatewaySystemType, "legacy-ingress") &&
+		strings.Contains(kube.GatewaySystemType, "gateway-api-default")
+}
+
+func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
+	httpRoute := route.ToHTTPRoute(
+		kube.GatewaySystemNamespace,
+		kube.GatewaySystemName,
+	)
+
+	createdHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Create(ctx, httpRoute, v1.CreateOptions{})
+	if err != nil {
+		logger.ErrorC(ctx, "Error to create HTTPRoute: %+v", err)
+		return nil, err
+	}
+
+	routeFromHTTPRoute := entity.RouteFromHTTPRouteGatewayV1(createdHTTPRoute)
+	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
+		httpRouteEntity := entity.RouteFromHTTPRoute(createdHTTPRoute)
+		_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)
+		}
+	}
+
+	return routeFromHTTPRoute, nil
 }

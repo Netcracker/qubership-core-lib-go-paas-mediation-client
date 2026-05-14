@@ -56,6 +56,9 @@ type Kubernetes struct {
 	UseNetworkingV1Ingress bool          // todo remove it in the nex major release if we don't support k8s 1.22 anymore
 	RolloutExecutor        exec.RolloutExecutor
 	BG2Enabled             func() bool
+	GatewaySystemType      string
+	GatewaySystemNamespace string
+	GatewaySystemName      string
 }
 
 // todo delete this in next major release!
@@ -119,14 +122,17 @@ func (r *BadRoutes) ToSliceMap() (result map[string][]string) {
 }
 
 type KubernetesClientBuilder struct {
-	namespace          string
-	client             *backend.KubernetesApi
-	watchExecutor      pmWatch.Executor
-	watchClientTimeout time.Duration
-	cache              *cache.ResourcesCache
-	badResources       *BadResources
-	rolloutExecutor    exec.RolloutExecutor
-	bg2Enabled         func() bool
+	namespace              string
+	client                 *backend.KubernetesApi
+	watchExecutor          pmWatch.Executor
+	watchClientTimeout     time.Duration
+	cache                  *cache.ResourcesCache
+	badResources           *BadResources
+	rolloutExecutor        exec.RolloutExecutor
+	bg2Enabled             func() bool
+	gatewaySystemType      string
+	gatewaySystemNamespace string
+	gatewaySystemName      string
 }
 
 func NewKubernetesClientBuilder() *KubernetesClientBuilder {
@@ -170,6 +176,21 @@ func (b *KubernetesClientBuilder) WithRolloutExecutor(rolloutExecutor exec.Rollo
 
 func (b *KubernetesClientBuilder) WithBG2Enabled(enabled func() bool) *KubernetesClientBuilder {
 	b.bg2Enabled = enabled
+	return b
+}
+
+func (b *KubernetesClientBuilder) WithGatewaySystemType(gatewaySystemType string) *KubernetesClientBuilder {
+	b.gatewaySystemType = gatewaySystemType
+	return b
+}
+
+func (b *KubernetesClientBuilder) WithGatewaySystemNamespace(namespace string) *KubernetesClientBuilder {
+	b.gatewaySystemNamespace = namespace
+	return b
+}
+
+func (b *KubernetesClientBuilder) WithGatewaySystemName(name string) *KubernetesClientBuilder {
+	b.gatewaySystemName = name
 	return b
 }
 
@@ -230,6 +251,16 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	gatewaySystemNamespace := b.gatewaySystemNamespace
+	if gatewaySystemNamespace == "" {
+		gatewaySystemNamespace = "gateway-system"
+	}
+	gatewaySystemName := b.gatewaySystemName
+	if gatewaySystemName == "" {
+		gatewaySystemName = "default-external-gateway"
+	}
+
 	return &Kubernetes{
 		initCacheOnce:          sync.Once{},
 		client:                 b.client,
@@ -242,6 +273,9 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		UseNetworkingV1Ingress: useNetworkingV1Ingress,
 		RolloutExecutor:        b.rolloutExecutor,
 		BG2Enabled:             b.bg2Enabled,
+		GatewaySystemType:      b.gatewaySystemType,
+		GatewaySystemNamespace: gatewaySystemNamespace,
+		GatewaySystemName:      gatewaySystemName,
 	}, nil
 }
 

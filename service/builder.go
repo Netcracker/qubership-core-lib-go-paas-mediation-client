@@ -29,6 +29,9 @@ type PlatformClientBuilder struct {
 	consulEnabled           *bool
 	consulUrl               *string
 	consulToken             *string
+	gatewaySystemType       *string
+	gatewaySystemNamespace  *string
+	gatewaySystemName       *string
 }
 
 func NewPlatformClientBuilder() PlatformClientBuilder {
@@ -152,6 +155,21 @@ func (builder PlatformClientBuilder) WithConsul(consulEnabled bool, consulUrl st
 		s := ""
 		builder.consulToken = &s
 	}
+	return builder
+}
+
+func (builder PlatformClientBuilder) WithGatewaySystemType(gatewaySystemType string) PlatformClientBuilder {
+	builder.gatewaySystemType = &gatewaySystemType
+	return builder
+}
+
+func (builder PlatformClientBuilder) WithGatewaySystemNamespace(namespace string) PlatformClientBuilder {
+	builder.gatewaySystemNamespace = &namespace
+	return builder
+}
+
+func (builder PlatformClientBuilder) WithGatewaySystemName(name string) PlatformClientBuilder {
+	builder.gatewaySystemName = &name
 	return builder
 }
 
