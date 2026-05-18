@@ -241,13 +241,10 @@ func (route Route) GetMetadata() Metadata {
 }
 
 func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.HTTPRoute {
+	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
+
 	httpRoute := &gatewayv1.HTTPRoute{
 		ObjectMeta: *route.Metadata.ToObjectMeta(),
-	}
-
-	annotations := route.Metadata.Annotations
-	if annotations == nil {
-		annotations = make(map[string]string)
 	}
 
 	ns := gatewayv1.Namespace(gatewayNamespace)
@@ -259,34 +256,53 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	}
 
 	httpRoute.Spec.Hostnames = []gatewayv1.Hostname{gatewayv1.Hostname(route.Spec.Host)}
+	httpRoute.Spec.Rules = []gatewayv1.HTTPRouteRule{buildHTTPRouteRule(route, annotations)}
 
-	pathType := gatewayv1.PathMatchPathPrefix
-	if route.Spec.PathType != "" {
-		switch route.Spec.PathType {
-		case "Exact":
-			pathType = gatewayv1.PathMatchExact
-		case "Prefix", "ImplementationSpecific":
-			pathType = gatewayv1.PathMatchPathPrefix
-		default:
-			pathType = gatewayv1.PathMatchPathPrefix
-		}
+	logAdditionalResourceWarnings(annotations, route.Metadata.Name)
+
+	return httpRoute
+}
+
+func normalizeRouteAnnotations(annotations map[string]string) map[string]string {
+	if annotations == nil {
+		return make(map[string]string)
 	}
+	return annotations
+}
 
-	path := route.Spec.Path
+func pathMatchTypeFromRoute(pathType string) gatewayv1.PathMatchType {
+	if pathType == "" {
+		return gatewayv1.PathMatchPathPrefix
+	}
+	switch pathType {
+	case "Exact":
+		return gatewayv1.PathMatchExact
+	case "Prefix", "ImplementationSpecific":
+		return gatewayv1.PathMatchPathPrefix
+	default:
+		return gatewayv1.PathMatchPathPrefix
+	}
+}
+
+func routePathValue(path string) string {
 	if path == "" {
-		path = "/"
+		return "/"
 	}
+	return path
+}
 
-	port := gatewayv1.PortNumber(route.Spec.Port.TargetPort)
-	if port == 0 {
-		port = 8080
+func routeBackendPort(targetPort int32) gatewayv1.PortNumber {
+	if targetPort == 0 {
+		return 8080
 	}
+	return gatewayv1.PortNumber(targetPort)
+}
 
+func buildHTTPRouteFilters(annotations map[string]string) []gatewayv1.HTTPRouteFilter {
 	var filters []gatewayv1.HTTPRouteFilter
 
 	if enableCors, exists := annotations["nginx.ingress.kubernetes.io/enable-cors"]; exists && enableCors == "true" {
-		corsFilter := buildCORSFilter(annotations)
-		if corsFilter != nil {
+		if corsFilter := buildCORSFilter(annotations); corsFilter != nil {
 			filters = append(filters, *corsFilter)
 		}
 	}
@@ -295,6 +311,15 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 		logger.Warn("Ingress annotation 'configuration-snippet' found but cannot be automatically converted to HTTPRoute. " +
 			"Manual conversion required using RequestHeaderModifier/ResponseHeaderModifier filters. See GatewayAPIMigration.md section 6")
 	}
+
+	return filters
+}
+
+func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HTTPRouteRule {
+	pathType := pathMatchTypeFromRoute(route.Spec.PathType)
+	path := routePathValue(route.Spec.Path)
+	port := routeBackendPort(route.Spec.Port.TargetPort)
+	filters := buildHTTPRouteFilters(annotations)
 
 	rule := gatewayv1.HTTPRouteRule{
 		Matches: []gatewayv1.HTTPRouteMatch{
@@ -322,8 +347,7 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	}
 
 	if affinity, exists := annotations["nginx.ingress.kubernetes.io/affinity"]; exists && affinity == "cookie" {
-		sessionPersistence := buildSessionPersistence(annotations)
-		if sessionPersistence != nil {
+		if sessionPersistence := buildSessionPersistence(annotations); sessionPersistence != nil {
 			rule.SessionPersistence = sessionPersistence
 		}
 	}
@@ -332,11 +356,7 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 		rule.Timeouts = timeouts
 	}
 
-	httpRoute.Spec.Rules = []gatewayv1.HTTPRouteRule{rule}
-
-	logAdditionalResourceWarnings(annotations, route.Metadata.Name)
-
-	return httpRoute
+	return rule
 }
 
 func buildCORSFilter(annotations map[string]string) *gatewayv1.HTTPRouteFilter {

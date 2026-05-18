@@ -194,13 +194,7 @@ func (b *KubernetesClientBuilder) WithGatewaySystemName(name string) *Kubernetes
 	return b
 }
 
-func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
-	if b.namespace == "" {
-		return nil, fmt.Errorf("namespace cannot be empty")
-	}
-	if b.client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
-	}
+func (b *KubernetesClientBuilder) applyDefaults() {
 	if b.watchExecutor == nil {
 		b.watchExecutor = &DefaultWatchExecutor{}
 	}
@@ -216,6 +210,47 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 	if b.cache == nil {
 		b.cache = &cache.ResourcesCache{} // set empty cache
 	}
+}
+
+func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers *SharedWatchHandlers) error {
+	discovery := b.client.KubernetesInterface.Discovery()
+
+	if hasKindGatewayApi("HTTPRoute", discovery) {
+		if err := gatewayv1.Install(scheme.Scheme); err != nil {
+			return err
+		}
+		handlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	}
+
+	if hasKindGatewayApi("GRPCRoute", discovery) {
+		if err := gatewayv1.Install(scheme.Scheme); err != nil {
+			return err
+		}
+		handlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	}
+
+	return nil
+}
+
+func resolveGatewaySystemConfig(namespace, name string) (string, string) {
+	if namespace == "" {
+		namespace = "gateway-system"
+	}
+	if name == "" {
+		name = "default-external-gateway"
+	}
+	return namespace, name
+}
+
+func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
+	if b.namespace == "" {
+		return nil, fmt.Errorf("namespace cannot be empty")
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("client cannot be nil")
+	}
+	b.applyDefaults()
+
 	version, err := b.client.KubernetesInterface.Discovery().ServerVersion()
 	if err != nil {
 		return nil, err
@@ -230,20 +265,8 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		b.client.NetworkingV1().RESTClient(),
 		b.client.ExtensionsV1beta1().RESTClient(),
 	)
-	if hasKindGatewayApi("HTTPRoute", b.client.KubernetesInterface.Discovery()) {
-		err := gatewayv1.Install(scheme.Scheme)
-		if err != nil {
-			return nil, err
-		}
-		watchEventHandlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
-	}
-
-	if hasKindGatewayApi("GRPCRoute", b.client.KubernetesInterface.Discovery()) {
-		err := gatewayv1.Install(scheme.Scheme)
-		if err != nil {
-			return nil, err
-		}
-		watchEventHandlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	if err := b.enrichWatchHandlersWithGatewayRoutes(watchEventHandlers); err != nil {
+		return nil, err
 	}
 
 	ctx := context.Background() //todo make all parent functions to pass context, this context will be able to cancel everything inside Kubernetes srv when it's no longer needed
@@ -252,14 +275,7 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		return nil, err
 	}
 
-	gatewaySystemNamespace := b.gatewaySystemNamespace
-	if gatewaySystemNamespace == "" {
-		gatewaySystemNamespace = "gateway-system"
-	}
-	gatewaySystemName := b.gatewaySystemName
-	if gatewaySystemName == "" {
-		gatewaySystemName = "default-external-gateway"
-	}
+	gatewaySystemNamespace, gatewaySystemName := resolveGatewaySystemConfig(b.gatewaySystemNamespace, b.gatewaySystemName)
 
 	return &Kubernetes{
 		initCacheOnce:          sync.Once{},
