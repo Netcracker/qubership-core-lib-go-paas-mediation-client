@@ -302,9 +302,8 @@ func buildHTTPRouteFilters(annotations map[string]string) []gatewayv1.HTTPRouteF
 	var filters []gatewayv1.HTTPRouteFilter
 
 	if enableCors, exists := annotations["nginx.ingress.kubernetes.io/enable-cors"]; exists && enableCors == "true" {
-		if corsFilter := buildCORSFilter(annotations); corsFilter != nil {
-			filters = append(filters, *corsFilter)
-		}
+		logger.Warn("CORS annotation detected. Note: CORS configuration in HTTPRoute may differ between Gateway API implementations. " +
+			"See GatewayAPIMigration.md section 8 for manual configuration")
 	}
 
 	if snippet, exists := annotations["nginx.ingress.kubernetes.io/configuration-snippet"]; exists && snippet != "" {
@@ -357,14 +356,6 @@ func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HT
 	}
 
 	return rule
-}
-
-func buildCORSFilter(annotations map[string]string) *gatewayv1.HTTPRouteFilter {
-
-	logger.Warn("CORS annotation detected. Note: CORS configuration in HTTPRoute may differ between Gateway API implementations. " +
-		"See GatewayAPIMigration.md section 8 for manual configuration")
-
-	return nil
 }
 
 func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPersistence {

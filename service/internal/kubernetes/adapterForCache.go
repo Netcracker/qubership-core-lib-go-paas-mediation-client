@@ -13,6 +13,7 @@ import (
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	coreV1 "k8s.io/api/core/v1"
 	networkingV1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -68,13 +69,13 @@ func NewCacheAdapters(ctx context.Context, namespace string, cache *cache.Resour
 	}
 
 	if cache.HTTPRoute != nil && watchHandlers.HTTPRouteV1 != nil {
-		if adapters.HTTPRouteV1, err = newCacheAdapter(ctx, namespace, cache.HTTPRoute, watchHandlers.HTTPRouteV1); err != nil {
+		if adapters.HTTPRouteV1, err = startGatewayRouteCacheAdapter(ctx, namespace, cache.HTTPRoute, watchHandlers.HTTPRouteV1, "httproutes"); err != nil {
 			return nil, err
 		}
 	}
 
 	if cache.GRPCRoute != nil && watchHandlers.GRPCRouteV1 != nil {
-		if adapters.GRPCRouteV1, err = newCacheAdapter(ctx, namespace, cache.GRPCRoute, watchHandlers.GRPCRouteV1); err != nil {
+		if adapters.GRPCRouteV1, err = startGatewayRouteCacheAdapter(ctx, namespace, cache.GRPCRoute, watchHandlers.GRPCRouteV1, "grpcroutes"); err != nil {
 			return nil, err
 		}
 	}
@@ -87,6 +88,20 @@ type CacheAdapter[F runtime.Object, T entity.HasMetadata] struct {
 	Cache          *cache.ResourceCache[T]
 	WatcherHandler *SharedWatchHandler[F, T]
 	logger         logging.Logger
+}
+
+func startGatewayRouteCacheAdapter[F runtime.Object, T entity.HasMetadata](ctx context.Context, namespace string,
+	resourceCache *cache.ResourceCache[T], watchHandler *SharedWatchHandler[F, T], resourceName string) (*CacheAdapter[F, T], error) {
+	adapter, err := newCacheAdapter(ctx, namespace, resourceCache, watchHandler)
+	if err == nil {
+		return adapter, nil
+	}
+	if apierrors.IsForbidden(err) {
+		loggerCacheAdapter.WarnC(ctx, "Gateway %s cache watch is disabled: %v. Grant watch access to %s in gateway.networking.k8s.io for namespace %s",
+			resourceName, err, resourceName, namespace)
+		return nil, nil
+	}
+	return nil, err
 }
 
 func newCacheAdapter[F runtime.Object, T entity.HasMetadata](ctx context.Context, namespace string,

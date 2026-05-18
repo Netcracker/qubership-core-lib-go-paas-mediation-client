@@ -15,13 +15,16 @@ import (
 	pmWatch "github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/watch"
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	"golang.org/x/mod/semver"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	extensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	networkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
+	"k8s.io/client-go/rest"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1_client "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
@@ -212,24 +215,93 @@ func (b *KubernetesClientBuilder) applyDefaults() {
 	}
 }
 
+func (b *KubernetesClientBuilder) needsGatewayRoutesWatchers() bool {
+	if b.cache == nil {
+		return false
+	}
+	return b.cache.HTTPRoute != nil || b.cache.GRPCRoute != nil
+}
+
+func canWatchGatewayResource(client kubernetes.Interface, namespace, resource string) (allowed bool, checked bool) {
+	review := &authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Namespace: namespace,
+				Verb:      "watch",
+				Group:     "gateway.networking.k8s.io",
+				Version:   "v1",
+				Resource:  resource,
+			},
+		},
+	}
+	result, err := client.AuthorizationV1().SelfSubjectAccessReviews().Create(context.Background(), review, v1.CreateOptions{})
+	if err != nil {
+		logger.Warnf("cannot verify RBAC for gateway %s watch in namespace %s: %v", resource, namespace, err)
+		return false, false
+	}
+	return result.Status.Allowed, true
+}
+
 func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers *SharedWatchHandlers) error {
+	if !b.needsGatewayRoutesWatchers() {
+		return nil
+	}
+
 	discovery := b.client.KubernetesInterface.Discovery()
+	authClient := b.client.KubernetesInterface
 
 	if hasKindGatewayApi("HTTPRoute", discovery) {
-		if err := gatewayv1.Install(scheme.Scheme); err != nil {
-			return err
-		}
-		handlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+		b.registerHTTPRouteWatchHandler(handlers, authClient)
 	}
 
 	if hasKindGatewayApi("GRPCRoute", discovery) {
-		if err := gatewayv1.Install(scheme.Scheme); err != nil {
-			return err
-		}
-		handlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+		b.registerGRPCRouteWatchHandler(handlers, authClient)
 	}
 
 	return nil
+}
+
+func (b *KubernetesClientBuilder) registerHTTPRouteWatchHandler(handlers *SharedWatchHandlers, authClient kubernetes.Interface) {
+	allowed, checked := canWatchGatewayResource(authClient, b.namespace, "httproutes")
+	if checked && !allowed {
+		logger.Warn("HTTPRoute API is available but ServiceAccount cannot watch httproutes in namespace '%s'; HTTPRoute cache watch is disabled", b.namespace)
+		return
+	}
+	restClient := gatewayRESTClient(b.client)
+	if restClient == nil {
+		logger.Warn("HTTPRoute cache is enabled but Gateway API REST client is not available; HTTPRoute watch is disabled")
+		return
+	}
+	if err := gatewayv1.Install(scheme.Scheme); err != nil {
+		logger.Errorf("failed to install Gateway API scheme for HTTPRoute watch: %v", err)
+		return
+	}
+	handlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, restClient)
+}
+
+func (b *KubernetesClientBuilder) registerGRPCRouteWatchHandler(handlers *SharedWatchHandlers, authClient kubernetes.Interface) {
+	allowed, checked := canWatchGatewayResource(authClient, b.namespace, "grpcroutes")
+	if checked && !allowed {
+		logger.Warn("GRPCRoute API is available but ServiceAccount cannot watch grpcroutes in namespace '%s'; GRPCRoute cache watch is disabled", b.namespace)
+		return
+	}
+	restClient := gatewayRESTClient(b.client)
+	if restClient == nil {
+		logger.Warn("GRPCRoute cache is enabled but Gateway API REST client is not available; GRPCRoute watch is disabled")
+		return
+	}
+	if err := gatewayv1.Install(scheme.Scheme); err != nil {
+		logger.Errorf("failed to install Gateway API scheme for GRPCRoute watch: %v", err)
+		return
+	}
+	handlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, restClient)
+}
+
+func gatewayRESTClient(client *backend.KubernetesApi) rest.Interface {
+	if client == nil || client.GatewayV1() == nil {
+		return nil
+	}
+	return client.GatewayV1().RESTClient()
 }
 
 func resolveGatewaySystemConfig(namespace, name string) (string, string) {
