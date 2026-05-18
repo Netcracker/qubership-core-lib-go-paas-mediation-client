@@ -94,62 +94,131 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 }
 
 func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
-	if kube.UseNetworkingV1Ingress {
-		originalIngress, e := kube.getNetworkingV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
-		if e != nil {
-			if paasErrors.IsNotFound(e) {
-				logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
-				return kube.CreateRoute(ctx, route, namespace)
-			}
-			logger.ErrorC(ctx, "Error to get ingress before update: %+v", e)
-			return nil, e
-		}
-		ingressToUpdate := route.ToIngressNetworkingV1()
-		ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
-		if className := ingressToUpdate.Spec.IngressClassName; className == nil || *className == "" {
-			ingressToUpdate.Spec.IngressClassName = originalIngress.Spec.IngressClassName
-		}
-		kube.modifyIngressClassForBG2(ingressToUpdate)
-		updatedIngress, e := kube.getNetworkingV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
-		if e != nil {
-			logger.ErrorC(ctx, "Error to update ingress: %+v", e)
-			return nil, e
-		}
-		ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(updatedIngress)
-		if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
-			_, e := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
-			if e != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", e)
-			}
-		}
-		return ingressNetworkingV1, nil
-	} else {
-		originalIngress, e := kube.getExtensionsV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
-		if e != nil {
-			if paasErrors.IsNotFound(e) {
-				logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
-				return kube.CreateRoute(ctx, route, namespace)
-			}
-			logger.ErrorC(ctx, "Error to get ingress before update: %+v", e)
-			return nil, e
-		}
-		ingressToUpdate := route.ToIngress()
-		ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
-		kube.modifyIngressClassForBG2(ingressToUpdate)
-		updatedIngress, e := kube.getExtensionsV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
-		if e != nil {
-			logger.ErrorC(ctx, "Error to update ingress: %+v", e)
-			return nil, e
-		}
-		routeFromIngress := entity.RouteFromIngress(updatedIngress)
-		if kube.Cache.Ingresses != nil && routeFromIngress != nil {
-			_, e := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
-			if e != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", e)
-			}
-		}
-		return routeFromIngress, nil
+	useGatewayAPI := kube.shouldUseGatewayAPI()
+	useLegacyIngress := kube.shouldCreateLegacyIngress()
+
+	if !useGatewayAPI && !useLegacyIngress {
+		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route update", kube.GatewaySystemType)
 	}
+
+	var result *entity.Route
+	var httpRouteExists bool
+	var ingressExists bool
+
+	if useGatewayAPI {
+		originalHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Get(ctx, route.Name, v1.GetOptions{})
+		if err == nil {
+			httpRouteExists = true
+			httpRouteToUpdate := route.ToHTTPRoute(kube.GatewaySystemNamespace, kube.GatewaySystemName)
+			httpRouteToUpdate.ResourceVersion = originalHTTPRoute.ResourceVersion
+
+			updatedHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Update(ctx, httpRouteToUpdate, v1.UpdateOptions{})
+			if err != nil {
+				logger.ErrorC(ctx, "Error to update HTTPRoute: %+v", err)
+				return nil, err
+			}
+			logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
+
+			routeFromHTTPRoute := entity.RouteFromHTTPRouteGatewayV1(updatedHTTPRoute)
+			if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
+				httpRouteEntity := entity.RouteFromHTTPRoute(updatedHTTPRoute)
+				_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
+				if err != nil {
+					return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)
+				}
+			}
+			result = routeFromHTTPRoute
+		} else if !paasErrors.IsNotFound(err) {
+			logger.ErrorC(ctx, "Error to get HTTPRoute before update: %+v", err)
+			return nil, err
+		}
+	}
+
+	if useLegacyIngress {
+		if kube.UseNetworkingV1Ingress {
+			originalIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
+			if err == nil {
+				ingressExists = true
+				ingressToUpdate := route.ToIngressNetworkingV1()
+				ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
+				if className := ingressToUpdate.Spec.IngressClassName; className == nil || *className == "" {
+					ingressToUpdate.Spec.IngressClassName = originalIngress.Spec.IngressClassName
+				}
+				kube.modifyIngressClassForBG2(ingressToUpdate)
+
+				if kube.shouldIgnoreIngressForConverter() {
+					if ingressToUpdate.Annotations == nil {
+						ingressToUpdate.Annotations = make(map[string]string)
+					}
+					ingressToUpdate.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+				}
+
+				updatedIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+				if err != nil {
+					logger.ErrorC(ctx, "Error to update ingress: %+v", err)
+					return nil, err
+				}
+				logger.InfoC(ctx, "Ingress updated: %s", route.Name)
+
+				ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(updatedIngress)
+				if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
+					_, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
+					if err != nil {
+						return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
+					}
+				}
+				if result == nil {
+					result = ingressNetworkingV1
+				}
+			} else if !paasErrors.IsNotFound(err) {
+				logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
+				return nil, err
+			}
+		} else {
+			originalIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
+			if err == nil {
+				ingressExists = true
+				ingressToUpdate := route.ToIngress()
+				ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
+				kube.modifyIngressClassForBG2(ingressToUpdate)
+
+				if kube.shouldIgnoreIngressForConverter() {
+					if ingressToUpdate.Annotations == nil {
+						ingressToUpdate.Annotations = make(map[string]string)
+					}
+					ingressToUpdate.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+				}
+
+				updatedIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+				if err != nil {
+					logger.ErrorC(ctx, "Error to update ingress: %+v", err)
+					return nil, err
+				}
+				logger.InfoC(ctx, "Ingress updated: %s", route.Name)
+
+				routeFromIngress := entity.RouteFromIngress(updatedIngress)
+				if kube.Cache.Ingresses != nil && routeFromIngress != nil {
+					_, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
+					if err != nil {
+						return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
+					}
+				}
+				if result == nil {
+					result = routeFromIngress
+				}
+			} else if !paasErrors.IsNotFound(err) {
+				logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
+				return nil, err
+			}
+		}
+	}
+
+	if !httpRouteExists && !ingressExists {
+		logger.WarnC(ctx, "Route %s not found. Creating new", route.Name)
+		return kube.CreateRoute(ctx, route, namespace)
+	}
+
+	return result, nil
 }
 
 func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, namespace string) (*entity.Route, error) {
@@ -163,31 +232,46 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 }
 
 func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName string, namespace string) error {
-	if kube.UseNetworkingV1Ingress {
-		err := kube.getNetworkingV1Client().
-			Ingresses(namespace).
-			Delete(ctx, routeName, v1.DeleteOptions{})
-		if err != nil {
-			logger.ErrorC(ctx, "Error while deleting a ingress=%s from kubernetes: %+v", routeName, err)
-			return err
+	useGatewayAPI := kube.shouldUseGatewayAPI()
+	useLegacyIngress := kube.shouldCreateLegacyIngress()
+
+	var firstErr error
+
+	if useGatewayAPI {
+		err := kube.getGatewayV1Client().HTTPRoutes(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+		if err != nil && !paasErrors.IsNotFound(err) {
+			logger.ErrorC(ctx, "Error while deleting HTTPRoute=%s from kubernetes: %+v", routeName, err)
+			firstErr = err
+		} else if err == nil {
+			logger.InfoC(ctx, "HTTPRoute deleted: %s", routeName)
+			if kube.Cache.HTTPRoute != nil {
+				kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
+			}
 		}
-		if kube.Cache.Ingresses != nil {
-			kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
-		}
-		return nil
-	} else {
-		err := kube.getExtensionsV1Client().
-			Ingresses(namespace).
-			Delete(ctx, routeName, v1.DeleteOptions{})
-		if err != nil {
-			logger.ErrorC(ctx, "Error while deleting a ingress=%s from kubernetes: %+v", routeName, err)
-			return err
-		}
-		if kube.Cache.Ingresses != nil {
-			kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
-		}
-		return nil
 	}
+
+	if useLegacyIngress {
+		var err error
+		if kube.UseNetworkingV1Ingress {
+			err = kube.getNetworkingV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+		} else {
+			err = kube.getExtensionsV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+		}
+
+		if err != nil && !paasErrors.IsNotFound(err) {
+			logger.ErrorC(ctx, "Error while deleting ingress=%s from kubernetes: %+v", routeName, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		} else if err == nil {
+			logger.InfoC(ctx, "Ingress deleted: %s", routeName)
+			if kube.Cache.Ingresses != nil {
+				kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
+			}
+		}
+	}
+
+	return firstErr
 }
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
