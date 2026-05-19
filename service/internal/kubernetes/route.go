@@ -21,6 +21,15 @@ var IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
 const (
 	LegacyIngress     = "legacy-ingress"
 	GatewayApiDefault = "gateway-api-default"
+
+	AnnotationBackendProtocol   = "nginx.ingress.kubernetes.io/backend-protocol"
+	AnnotationSecureBackends    = "nginx.ingress.kubernetes.io/secure-backends"
+	AnnotationAuthType          = "nginx.ingress.kubernetes.io/auth-type"
+	AnnotationSSLPassthrough    = "nginx.ingress.kubernetes.io/ssl-passthrough"
+	AnnotationConfigSnippet     = "nginx.ingress.kubernetes.io/configuration-snippet"
+	AnnotationUpstreamVhost     = "nginx.ingress.kubernetes.io/upstream-vhost"
+	AnnotationProxyRedirectFrom = "nginx.ingress.kubernetes.io/proxy-redirect-from"
+	AnnotationProxyRedirectTo   = "nginx.ingress.kubernetes.io/proxy-redirect-to"
 )
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
@@ -35,6 +44,9 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 	var err error
 
 	if useGatewayAPI {
+		if err = kube.validateAnnotationsForGatewayAPI(route.Metadata.Annotations); err != nil {
+			return nil, err
+		}
 		result, err = kube.createHTTPRoute(ctx, route, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
@@ -408,6 +420,27 @@ func (kube *Kubernetes) shouldIgnoreIngressForConverter() bool {
 	}
 	return strings.Contains(kube.GatewaySystemType, LegacyIngress) &&
 		strings.Contains(kube.GatewaySystemType, GatewayApiDefault)
+}
+
+func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]string) error {
+	criticalAnnotations := map[string]string{
+		AnnotationBackendProtocol:   "requires BackendTLSPolicy (for HTTPS) or BackendTrafficPolicy (for GRPC).",
+		AnnotationSecureBackends:    "requires BackendTLSPolicy.",
+		AnnotationAuthType:          "requires SecurityPolicy.",
+		AnnotationSSLPassthrough:    "requires TLSRoute instead of HTTPRoute. See GatewayAPIMigration.md section 12",
+		AnnotationConfigSnippet:     "requires manual conversion using RequestHeaderModifier/ResponseHeaderModifier filters.",
+		AnnotationUpstreamVhost:     "requires EnvoyExtensionPolicy with Lua.",
+		AnnotationProxyRedirectFrom: "requires EnvoyExtensionPolicy with Lua.",
+		AnnotationProxyRedirectTo:   "requires EnvoyExtensionPolicy with Lua.",
+	}
+
+	for key, message := range criticalAnnotations {
+		if val, exists := annotations[key]; exists && val != "" {
+			return fmt.Errorf("annotation '%s' is not supported for HTTPRoute creation: %s", key, message)
+		}
+	}
+
+	return nil
 }
 
 func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {

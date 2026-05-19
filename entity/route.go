@@ -11,6 +11,15 @@ import (
 
 var logger = logging.GetLogger("entity_route")
 
+const (
+	AnnotationAffinity            = "nginx.ingress.kubernetes.io/affinity"
+	AnnotationSessionCookieName   = "nginx.ingress.kubernetes.io/session-cookie-name"
+	AnnotationSessionCookieMaxAge = "nginx.ingress.kubernetes.io/session-cookie-max-age"
+	AnnotationProxyReadTimeout    = "nginx.ingress.kubernetes.io/proxy-read-timeout"
+	AnnotationProxySendTimeout    = "nginx.ingress.kubernetes.io/proxy-send-timeout"
+	AnnotationProxyConnectTimeout = "nginx.ingress.kubernetes.io/proxy-connect-timeout"
+)
+
 type (
 	// todo change to Ingress in next major release AND REWRITE entity to comply with Ingress structure!
 	Route struct {
@@ -258,8 +267,6 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	httpRoute.Spec.Hostnames = []gatewayv1.Hostname{gatewayv1.Hostname(route.Spec.Host)}
 	httpRoute.Spec.Rules = []gatewayv1.HTTPRouteRule{buildHTTPRouteRule(route, annotations)}
 
-	logAdditionalResourceWarnings(annotations, route.Metadata.Name)
-
 	return httpRoute
 }
 
@@ -298,27 +305,10 @@ func routeBackendPort(targetPort int32) gatewayv1.PortNumber {
 	return gatewayv1.PortNumber(targetPort)
 }
 
-func buildHTTPRouteFilters(annotations map[string]string) []gatewayv1.HTTPRouteFilter {
-	var filters []gatewayv1.HTTPRouteFilter
-
-	if enableCors, exists := annotations["nginx.ingress.kubernetes.io/enable-cors"]; exists && enableCors == "true" {
-		logger.Warn("CORS annotation detected. Note: CORS configuration in HTTPRoute may differ between Gateway API implementations. " +
-			"See GatewayAPIMigration.md section 8 for manual configuration")
-	}
-
-	if snippet, exists := annotations["nginx.ingress.kubernetes.io/configuration-snippet"]; exists && snippet != "" {
-		logger.Warn("Ingress annotation 'configuration-snippet' found but cannot be automatically converted to HTTPRoute. " +
-			"Manual conversion required using RequestHeaderModifier/ResponseHeaderModifier filters. See GatewayAPIMigration.md section 6")
-	}
-
-	return filters
-}
-
 func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HTTPRouteRule {
 	pathType := pathMatchTypeFromRoute(route.Spec.PathType)
 	path := routePathValue(route.Spec.Path)
 	port := routeBackendPort(route.Spec.Port.TargetPort)
-	filters := buildHTTPRouteFilters(annotations)
 
 	rule := gatewayv1.HTTPRouteRule{
 		Matches: []gatewayv1.HTTPRouteMatch{
@@ -341,11 +331,7 @@ func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HT
 		},
 	}
 
-	if len(filters) > 0 {
-		rule.Filters = filters
-	}
-
-	if affinity, exists := annotations["nginx.ingress.kubernetes.io/affinity"]; exists && affinity == "cookie" {
+	if affinity, exists := annotations[AnnotationAffinity]; exists && affinity == "cookie" {
 		if sessionPersistence := buildSessionPersistence(annotations); sessionPersistence != nil {
 			rule.SessionPersistence = sessionPersistence
 		}
@@ -396,48 +382,12 @@ func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
 
 	timeouts := &gatewayv1.HTTPRouteTimeouts{}
 
-	if readTimeout, exists := annotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]; exists && readTimeout != "" {
+	if readTimeout, exists := annotations[AnnotationProxyReadTimeout]; exists && readTimeout != "" {
 		timeout := gatewayv1.Duration(readTimeout + "s")
 		timeouts.Request = &timeout
 	}
 
 	return timeouts
-}
-
-func logAdditionalResourceWarnings(annotations map[string]string, routeName string) {
-	if protocol, exists := annotations["nginx.ingress.kubernetes.io/backend-protocol"]; exists && protocol == "HTTPS" {
-		logger.Warn("Route '%s': Ingress annotation 'backend-protocol: HTTPS' requires BackendTLSPolicy resource. "+
-			"See GatewayAPIMigration.md section 5", routeName)
-	}
-	if annotations["nginx.ingress.kubernetes.io/secure-backends"] != "" {
-		logger.Warn("Route '%s': Ingress annotation 'secure-backends' requires BackendTLSPolicy resource. "+
-			"See GatewayAPIMigration.md section 5", routeName)
-	}
-
-	if protocol, exists := annotations["nginx.ingress.kubernetes.io/backend-protocol"]; exists && protocol == "GRPC" {
-		logger.Warn("Route '%s': Ingress annotation 'backend-protocol: GRPC' requires BackendTrafficPolicy resource with useClientProtocol. "+
-			"See GatewayAPIMigration.md section 8", routeName)
-	}
-
-	if annotations["nginx.ingress.kubernetes.io/proxy-connect-timeout"] != "" {
-		logger.Warn("Route '%s': Ingress annotation 'proxy-connect-timeout' requires BackendTrafficPolicy resource. "+
-			"See GatewayAPIMigration.md section 9", routeName)
-	}
-
-	if annotations["nginx.ingress.kubernetes.io/auth-type"] != "" {
-		logger.Warn("Route '%s': Ingress annotation 'auth-type' requires SecurityPolicy resource. "+
-			"See GatewayAPIMigration.md section 13", routeName)
-	}
-
-	if passthrough, exists := annotations["nginx.ingress.kubernetes.io/ssl-passthrough"]; exists && passthrough == "true" {
-		logger.Warn("Route '%s': Ingress annotation 'ssl-passthrough' requires TLSRoute resource instead of HTTPRoute. "+
-			"See GatewayAPIMigration.md section 12", routeName)
-	}
-
-	if annotations["nginx.ingress.kubernetes.io/app-root"] != "" {
-		logger.Warn("Route '%s': Ingress annotation 'app-root' requires additional HTTPRoute rule with RequestRedirect filter. "+
-			"See GatewayAPIMigration.md section 7", routeName)
-	}
 }
 
 func RouteFromHTTPRouteGatewayV1(httpRoute *gatewayv1.HTTPRoute) *Route {
