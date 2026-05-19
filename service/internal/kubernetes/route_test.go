@@ -359,3 +359,272 @@ func Test_CreateRouteBG2_Enabled(t *testing.T) {
 	assertions.Nil(err)
 	assertions.NotNil(route)
 }
+
+func Test_ShouldUseGatewayAPI(t *testing.T) {
+	tests := []struct {
+		name              string
+		gatewaySystemType string
+		expected          bool
+	}{
+		{"Empty string", "", false},
+		{"Legacy ingress only", "legacy-ingress", false},
+		{"Gateway API default only", "gateway-api-default", true},
+		{"Both modes", "legacy-ingress,gateway-api-default", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kube := &Kubernetes{GatewaySystemType: tt.gatewaySystemType}
+			result := kube.shouldUseGatewayAPI()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func Test_ShouldCreateLegacyIngress(t *testing.T) {
+	tests := []struct {
+		name              string
+		gatewaySystemType string
+		expected          bool
+	}{
+		{"Empty string", "", true},
+		{"Legacy ingress only", "legacy-ingress", true},
+		{"Gateway API default only", "gateway-api-default", false},
+		{"Both modes", "legacy-ingress,gateway-api-default", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kube := &Kubernetes{GatewaySystemType: tt.gatewaySystemType}
+			result := kube.shouldCreateLegacyIngress()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func Test_ShouldIgnoreIngressForConverter(t *testing.T) {
+	tests := []struct {
+		name              string
+		gatewaySystemType string
+		expected          bool
+	}{
+		{"Empty string", "", false},
+		{"Legacy ingress only", "legacy-ingress", false},
+		{"Gateway API default only", "gateway-api-default", false},
+		{"Both modes", "legacy-ingress,gateway-api-default", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kube := &Kubernetes{GatewaySystemType: tt.gatewaySystemType}
+			result := kube.shouldIgnoreIngressForConverter()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func Test_CreateRoute_GatewayAPIOnly_Error(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{Name: testIngress, Namespace: testNamespace1},
+		Spec:     entity.RouteSpec{Host: "local"},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = "invalid-type"
+
+	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.NotNil(err)
+	assertions.Contains(err.Error(), "does not allow any Route creation")
+}
+
+func Test_DeleteRoute_GatewayAPIOnly_Error(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = "invalid-type"
+
+	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Nil(err) // DeleteRoute не возвращает ошибку, просто ничего не делает
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_Error(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{Name: testIngress, Namespace: testNamespace1},
+		Spec:     entity.RouteSpec{Host: "local"},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = "invalid-type"
+
+	_, err := kubeClient.UpdateOrCreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.NotNil(err)
+	assertions.Contains(err.Error(), "does not allow any Route update")
+}
+
+func Test_CreateRoute_WithBothModesIgnoresIngress(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{
+			Name:      testIngress,
+			Namespace: testNamespace1,
+		},
+		Spec: entity.RouteSpec{
+			Host:    "test.example.com",
+			Path:    "/test",
+			Service: entity.Target{Name: "test-service"},
+			Port:    entity.RoutePort{TargetPort: 8080},
+		},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.UseNetworkingV1Ingress = true
+	kubeClient.GatewaySystemType = "legacy-ingress" // Only Ingress, no Gateway API
+
+	route, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.Nil(err)
+	assertions.NotNil(route)
+
+	// Verify Ingress created without ignore annotation (since only legacy-ingress mode)
+	ingressList, err := kubeClientSet.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.Nil(err)
+	assertions.Equal(1, len(ingressList.Items))
+	assertions.Empty(ingressList.Items[0].Annotations["gateway-api-converter.netcracker.com/ignore"])
+}
+
+func Test_ValidateAnnotationsForGatewayAPI_BackendProtocol(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{
+			Name:      testIngress,
+			Namespace: testNamespace1,
+			Annotations: map[string]string{
+				AnnotationBackendProtocol: "HTTPS",
+			},
+		},
+		Spec: entity.RouteSpec{
+			Host:    "test.example.com",
+			Service: entity.Target{Name: "test-service"},
+			Port:    entity.RoutePort{TargetPort: 8080},
+		},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = GatewayApiDefault
+
+	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.NotNil(err)
+	assertions.Contains(err.Error(), "backend-protocol")
+	assertions.Contains(err.Error(), "not supported for HTTPRoute creation")
+}
+
+func Test_ValidateAnnotationsForGatewayAPI_SSLPassthrough(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{
+			Name:      testIngress,
+			Namespace: testNamespace1,
+			Annotations: map[string]string{
+				AnnotationSSLPassthrough: "true",
+			},
+		},
+		Spec: entity.RouteSpec{
+			Host:    "test.example.com",
+			Service: entity.Target{Name: "test-service"},
+			Port:    entity.RoutePort{TargetPort: 8080},
+		},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = GatewayApiDefault
+
+	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.NotNil(err)
+	assertions.Contains(err.Error(), "ssl-passthrough")
+	assertions.Contains(err.Error(), "TLSRoute")
+}
+
+func Test_ValidateAnnotationsForGatewayAPI_AllowedAnnotations(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{
+			Name:      testIngress,
+			Namespace: testNamespace1,
+			Annotations: map[string]string{
+				entity.AnnotationAffinity:          "cookie",
+				entity.AnnotationSessionCookieName: "my-cookie",
+				entity.AnnotationProxyReadTimeout:  "1800",
+			},
+		},
+		Spec: entity.RouteSpec{
+			Host:    "test.example.com",
+			Service: entity.Target{Name: "test-service"},
+			Port:    entity.RoutePort{TargetPort: 8080},
+		},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystemType = LegacyIngress // Only Ingress mode - no validation
+
+	route, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.Nil(err)
+	assertions.NotNil(route)
+}
+
+func Test_ValidateAnnotationsForGatewayAPI_LegacyIngressAllowsCritical(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	routeToCreate := &entity.Route{
+		Metadata: entity.Metadata{
+			Name:      testIngress,
+			Namespace: testNamespace1,
+			Annotations: map[string]string{
+				AnnotationBackendProtocol: "HTTPS",
+			},
+		},
+		Spec: entity.RouteSpec{
+			Host:    "test.example.com",
+			Service: entity.Target{Name: "test-service"},
+			Port:    entity.RoutePort{TargetPort: 8080},
+		},
+	}
+
+	kubeClientSet := fake.NewClientset()
+	cert_client := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.UseNetworkingV1Ingress = true
+	kubeClient.GatewaySystemType = LegacyIngress // Only Ingress - should NOT validate
+
+	route, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
+	assertions.Nil(err) // No error because legacy-ingress doesn't validate
+	assertions.NotNil(route)
+}
