@@ -16,6 +16,7 @@ import (
 )
 
 var BG2IngressClassName = "bg.mesh.netcracker.com"
+var IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	useGatewayAPI := kube.shouldUseGatewayAPI()
@@ -48,7 +49,7 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 			if ingress.Annotations == nil {
 				ingress.Annotations = make(map[string]string)
 			}
-			ingress.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+			ingress.Annotations[IgnoreApiConverterAnnotation] = "true"
 		}
 
 		createdIngress, e := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
@@ -73,7 +74,7 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 			if ingress.Annotations == nil {
 				ingress.Annotations = make(map[string]string)
 			}
-			ingress.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+			ingress.Annotations[IgnoreApiConverterAnnotation] = "true"
 		}
 
 		createdIngress, e := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
@@ -150,7 +151,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 					if ingressToUpdate.Annotations == nil {
 						ingressToUpdate.Annotations = make(map[string]string)
 					}
-					ingressToUpdate.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+					ingressToUpdate.Annotations[IgnoreApiConverterAnnotation] = "true"
 				}
 
 				updatedIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
@@ -186,7 +187,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 					if ingressToUpdate.Annotations == nil {
 						ingressToUpdate.Annotations = make(map[string]string)
 					}
-					ingressToUpdate.Annotations["gateway-api-converter.netcracker.com/ignore"] = "true"
+					ingressToUpdate.Annotations[IgnoreApiConverterAnnotation] = "true"
 				}
 
 				updatedIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
@@ -232,46 +233,58 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 }
 
 func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName string, namespace string) error {
-	useGatewayAPI := kube.shouldUseGatewayAPI()
-	useLegacyIngress := kube.shouldCreateLegacyIngress()
-
 	var firstErr error
 
-	if useGatewayAPI {
-		err := kube.getGatewayV1Client().HTTPRoutes(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
-		if err != nil && !paasErrors.IsNotFound(err) {
-			logger.ErrorC(ctx, "Error while deleting HTTPRoute=%s from kubernetes: %+v", routeName, err)
+	if kube.shouldUseGatewayAPI() {
+		if err := kube.deleteRouteHTTPRoute(ctx, routeName, namespace); err != nil {
 			firstErr = err
-		} else if err == nil {
-			logger.InfoC(ctx, "HTTPRoute deleted: %s", routeName)
-			if kube.Cache.HTTPRoute != nil {
-				kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
-			}
 		}
 	}
 
-	if useLegacyIngress {
-		var err error
-		if kube.UseNetworkingV1Ingress {
-			err = kube.getNetworkingV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
-		} else {
-			err = kube.getExtensionsV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
-		}
-
-		if err != nil && !paasErrors.IsNotFound(err) {
-			logger.ErrorC(ctx, "Error while deleting ingress=%s from kubernetes: %+v", routeName, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else if err == nil {
-			logger.InfoC(ctx, "Ingress deleted: %s", routeName)
-			if kube.Cache.Ingresses != nil {
-				kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
-			}
+	if kube.shouldCreateLegacyIngress() {
+		if err := kube.deleteRouteLegacyIngress(ctx, routeName, namespace); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 
 	return firstErr
+}
+
+func (kube *Kubernetes) deleteRouteHTTPRoute(ctx context.Context, routeName, namespace string) error {
+	err := kube.getGatewayV1Client().HTTPRoutes(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+	if err == nil {
+		logger.InfoC(ctx, "HTTPRoute deleted: %s", routeName)
+		if kube.Cache.HTTPRoute != nil {
+			kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
+		}
+		return nil
+	}
+	if paasErrors.IsNotFound(err) {
+		return nil
+	}
+	logger.ErrorC(ctx, "Error while deleting HTTPRoute=%s from kubernetes: %+v", routeName, err)
+	return err
+}
+
+func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName, namespace string) error {
+	var err error
+	if kube.UseNetworkingV1Ingress {
+		err = kube.getNetworkingV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+	} else {
+		err = kube.getExtensionsV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
+	}
+	if err == nil {
+		logger.InfoC(ctx, "Ingress deleted: %s", routeName)
+		if kube.Cache.Ingresses != nil {
+			kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
+		}
+		return nil
+	}
+	if paasErrors.IsNotFound(err) {
+		return nil
+	}
+	logger.ErrorC(ctx, "Error while deleting ingress=%s from kubernetes: %+v", routeName, err)
+	return err
 }
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
