@@ -364,11 +364,11 @@ func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPe
 		Type: &persistenceType,
 	}
 
-	if cookieName, exists := annotations["nginx.ingress.kubernetes.io/session-cookie-name"]; exists && cookieName != "" {
+	if cookieName := annotations["nginx.ingress.kubernetes.io/session-cookie-name"]; cookieName != "" {
 		sessionPersistence.SessionName = &cookieName
 	}
 
-	if maxAge, exists := annotations["nginx.ingress.kubernetes.io/session-cookie-max-age"]; exists && maxAge != "" {
+	if maxAge := annotations["nginx.ingress.kubernetes.io/session-cookie-max-age"]; maxAge != "" {
 		timeout := gatewayv1.Duration(maxAge + "s")
 		sessionPersistence.AbsoluteTimeout = &timeout
 	}
@@ -409,7 +409,7 @@ func logAdditionalResourceWarnings(annotations map[string]string, routeName stri
 		logger.Warn("Route '%s': Ingress annotation 'backend-protocol: HTTPS' requires BackendTLSPolicy resource. "+
 			"See GatewayAPIMigration.md section 5", routeName)
 	}
-	if _, exists := annotations["nginx.ingress.kubernetes.io/secure-backends"]; exists {
+	if annotations["nginx.ingress.kubernetes.io/secure-backends"] != "" {
 		logger.Warn("Route '%s': Ingress annotation 'secure-backends' requires BackendTLSPolicy resource. "+
 			"See GatewayAPIMigration.md section 5", routeName)
 	}
@@ -419,12 +419,12 @@ func logAdditionalResourceWarnings(annotations map[string]string, routeName stri
 			"See GatewayAPIMigration.md section 8", routeName)
 	}
 
-	if _, exists := annotations["nginx.ingress.kubernetes.io/proxy-connect-timeout"]; exists {
+	if annotations["nginx.ingress.kubernetes.io/proxy-connect-timeout"] != "" {
 		logger.Warn("Route '%s': Ingress annotation 'proxy-connect-timeout' requires BackendTrafficPolicy resource. "+
 			"See GatewayAPIMigration.md section 9", routeName)
 	}
 
-	if _, exists := annotations["nginx.ingress.kubernetes.io/auth-type"]; exists {
+	if annotations["nginx.ingress.kubernetes.io/auth-type"] != "" {
 		logger.Warn("Route '%s': Ingress annotation 'auth-type' requires SecurityPolicy resource. "+
 			"See GatewayAPIMigration.md section 13", routeName)
 	}
@@ -434,7 +434,7 @@ func logAdditionalResourceWarnings(annotations map[string]string, routeName stri
 			"See GatewayAPIMigration.md section 12", routeName)
 	}
 
-	if _, exists := annotations["nginx.ingress.kubernetes.io/app-root"]; exists {
+	if annotations["nginx.ingress.kubernetes.io/app-root"] != "" {
 		logger.Warn("Route '%s': Ingress annotation 'app-root' requires additional HTTPRoute rule with RequestRedirect filter. "+
 			"See GatewayAPIMigration.md section 7", routeName)
 	}
@@ -442,7 +442,6 @@ func logAdditionalResourceWarnings(annotations map[string]string, routeName stri
 
 func RouteFromHTTPRouteGatewayV1(httpRoute *gatewayv1.HTTPRoute) *Route {
 	logger.Debugf("Processing RouteFromHTTPRouteGatewayV1, httpRoute: %s", httpRoute.Name)
-	metadata := *FromObjectMeta("Route", &httpRoute.ObjectMeta)
 
 	var routeSpec RouteSpec
 	if len(httpRoute.Spec.Rules) > 0 &&
@@ -484,5 +483,6 @@ func RouteFromHTTPRouteGatewayV1(httpRoute *gatewayv1.HTTPRoute) *Route {
 		}
 	}
 
+	metadata := *FromObjectMeta("Route", &httpRoute.ObjectMeta)
 	return &Route{Spec: routeSpec, Metadata: metadata}
 }

@@ -18,6 +18,11 @@ import (
 var BG2IngressClassName = "bg.mesh.netcracker.com"
 var IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
 
+const (
+	LegacyIngress     = "legacy-ingress"
+	GatewayApiDefault = "gateway-api-default"
+)
+
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	useGatewayAPI := kube.shouldUseGatewayAPI()
 	useLegacyIngress := kube.shouldCreateLegacyIngress()
@@ -387,22 +392,22 @@ func (kube *Kubernetes) shouldUseGatewayAPI() bool {
 	if kube.GatewaySystemType == "" {
 		return false
 	}
-	return strings.Contains(kube.GatewaySystemType, "gateway-api-default")
+	return strings.Contains(kube.GatewaySystemType, GatewayApiDefault)
 }
 
 func (kube *Kubernetes) shouldCreateLegacyIngress() bool {
 	if kube.GatewaySystemType == "" {
 		return true
 	}
-	return strings.Contains(kube.GatewaySystemType, "legacy-ingress")
+	return strings.Contains(kube.GatewaySystemType, LegacyIngress)
 }
 
 func (kube *Kubernetes) shouldIgnoreIngressForConverter() bool {
 	if kube.GatewaySystemType == "" {
 		return false
 	}
-	return strings.Contains(kube.GatewaySystemType, "legacy-ingress") &&
-		strings.Contains(kube.GatewaySystemType, "gateway-api-default")
+	return strings.Contains(kube.GatewaySystemType, LegacyIngress) &&
+		strings.Contains(kube.GatewaySystemType, GatewayApiDefault)
 }
 
 func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
