@@ -17,6 +17,7 @@ import (
 	. "github.com/smarty/assertions"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,9 +25,18 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
+
+func prependAllowedGatewayWatchReactor(client *fake.Clientset) {
+	client.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		review := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview)
+		review.Status = authorizationv1.SubjectAccessReviewStatus{Allowed: true}
+		return true, review, nil
+	})
+}
 
 const (
 	testDeploymentName = "test-deployment"
@@ -358,40 +368,71 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NotNil(kubernetes.Cache)
 }
 
-func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
+func Test_BuildSkipsGatewayHTTPRouteWatchHandlersWithoutCache(t *testing.T) {
 	assertions := require.New(t)
 	k8sClient := fake.NewClientset()
-	// advertise gateway kinds in discovery
 	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDisc.Resources = []*metav1.APIResourceList{{
 		GroupVersion: "gateway.networking.k8s.io/v1",
 		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
 	}}
-	// gateway client (fake)
 	gwClient := gatewayclientfake.NewSimpleClientset()
 	kube, err := NewKubernetesClientBuilder().
 		WithNamespace(testNamespace1).
 		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
 		Build()
 	assertions.NoError(err)
-	assertions.NotNil(kube.WatchHandlers.HTTPRouteV1)
+	assertions.Nil(kube.WatchHandlers.HTTPRouteV1)
+}
+
+func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
+	assertions := require.New(t)
+	k8sClient := fake.NewClientset()
+	prependAllowedGatewayWatchReactor(k8sClient)
+	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
+	fakeDisc.Resources = []*metav1.APIResourceList{{
+		GroupVersion: "gateway.networking.k8s.io/v1",
+		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
+	}}
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	builder := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
+		WithCache(cache.NewTestResourcesCache(cache.HttpRouteCache))
+	builder.applyDefaults()
+	handlers := NewSharedWatchEventHandlers(builder.watchExecutor, builder.watchClientTimeout,
+		k8sClient.CoreV1().RESTClient(),
+		builder.client.CertmanagerV1().RESTClient(),
+		k8sClient.NetworkingV1().RESTClient(),
+		k8sClient.ExtensionsV1beta1().RESTClient(),
+	)
+	assertions.NoError(builder.enrichWatchHandlersWithGatewayRoutes(handlers))
+	assertions.NotNil(handlers.HTTPRouteV1)
 }
 
 func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
 	assertions := require.New(t)
 	k8sClient := fake.NewClientset()
+	prependAllowedGatewayWatchReactor(k8sClient)
 	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
 	fakeDisc.Resources = []*metav1.APIResourceList{{
 		GroupVersion: "gateway.networking.k8s.io/v1",
 		APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
 	}}
 	gwClient := gatewayclientfake.NewSimpleClientset()
-	kube, err := NewKubernetesClientBuilder().
+	builder := NewKubernetesClientBuilder().
 		WithNamespace(testNamespace1).
 		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
-		Build()
-	assertions.NoError(err)
-	assertions.NotNil(kube.WatchHandlers.GRPCRouteV1)
+		WithCache(cache.NewTestResourcesCache(cache.GrpcRouteCache))
+	builder.applyDefaults()
+	handlers := NewSharedWatchEventHandlers(builder.watchExecutor, builder.watchClientTimeout,
+		k8sClient.CoreV1().RESTClient(),
+		builder.client.CertmanagerV1().RESTClient(),
+		k8sClient.NetworkingV1().RESTClient(),
+		k8sClient.ExtensionsV1beta1().RESTClient(),
+	)
+	assertions.NoError(builder.enrichWatchHandlersWithGatewayRoutes(handlers))
+	assertions.NotNil(handlers.GRPCRouteV1)
 }
 
 func Test_GetHttpRouteList_success(t *testing.T) {

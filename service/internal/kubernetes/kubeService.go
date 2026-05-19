@@ -15,13 +15,16 @@ import (
 	pmWatch "github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/watch"
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	"golang.org/x/mod/semver"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	extensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	networkingv1 "k8s.io/client-go/kubernetes/typed/networking/v1"
+	"k8s.io/client-go/rest"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1_client "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
@@ -56,6 +59,9 @@ type Kubernetes struct {
 	UseNetworkingV1Ingress bool          // todo remove it in the nex major release if we don't support k8s 1.22 anymore
 	RolloutExecutor        exec.RolloutExecutor
 	BG2Enabled             func() bool
+	GatewaySystemType      string
+	GatewaySystemNamespace string
+	GatewaySystemName      string
 }
 
 // todo delete this in next major release!
@@ -119,14 +125,17 @@ func (r *BadRoutes) ToSliceMap() (result map[string][]string) {
 }
 
 type KubernetesClientBuilder struct {
-	namespace          string
-	client             *backend.KubernetesApi
-	watchExecutor      pmWatch.Executor
-	watchClientTimeout time.Duration
-	cache              *cache.ResourcesCache
-	badResources       *BadResources
-	rolloutExecutor    exec.RolloutExecutor
-	bg2Enabled         func() bool
+	namespace              string
+	client                 *backend.KubernetesApi
+	watchExecutor          pmWatch.Executor
+	watchClientTimeout     time.Duration
+	cache                  *cache.ResourcesCache
+	badResources           *BadResources
+	rolloutExecutor        exec.RolloutExecutor
+	bg2Enabled             func() bool
+	gatewaySystemType      string
+	gatewaySystemNamespace string
+	gatewaySystemName      string
 }
 
 func NewKubernetesClientBuilder() *KubernetesClientBuilder {
@@ -173,13 +182,22 @@ func (b *KubernetesClientBuilder) WithBG2Enabled(enabled func() bool) *Kubernete
 	return b
 }
 
-func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
-	if b.namespace == "" {
-		return nil, fmt.Errorf("namespace cannot be empty")
-	}
-	if b.client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
-	}
+func (b *KubernetesClientBuilder) WithGatewaySystemType(gatewaySystemType string) *KubernetesClientBuilder {
+	b.gatewaySystemType = gatewaySystemType
+	return b
+}
+
+func (b *KubernetesClientBuilder) WithGatewaySystemNamespace(namespace string) *KubernetesClientBuilder {
+	b.gatewaySystemNamespace = namespace
+	return b
+}
+
+func (b *KubernetesClientBuilder) WithGatewaySystemName(name string) *KubernetesClientBuilder {
+	b.gatewaySystemName = name
+	return b
+}
+
+func (b *KubernetesClientBuilder) applyDefaults() {
 	if b.watchExecutor == nil {
 		b.watchExecutor = &DefaultWatchExecutor{}
 	}
@@ -195,6 +213,116 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 	if b.cache == nil {
 		b.cache = &cache.ResourcesCache{} // set empty cache
 	}
+}
+
+func (b *KubernetesClientBuilder) needsGatewayRoutesWatchers() bool {
+	if b.cache == nil {
+		return false
+	}
+	return b.cache.HTTPRoute != nil || b.cache.GRPCRoute != nil
+}
+
+func canWatchGatewayResource(client kubernetes.Interface, namespace, resource string) (allowed bool, checked bool) {
+	review := &authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Namespace: namespace,
+				Verb:      "watch",
+				Group:     "gateway.networking.k8s.io",
+				Version:   "v1",
+				Resource:  resource,
+			},
+		},
+	}
+	result, err := client.AuthorizationV1().SelfSubjectAccessReviews().Create(context.Background(), review, v1.CreateOptions{})
+	if err != nil {
+		logger.Warnf("cannot verify RBAC for gateway %s watch in namespace %s: %v", resource, namespace, err)
+		return false, false
+	}
+	return result.Status.Allowed, true
+}
+
+func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers *SharedWatchHandlers) error {
+	if !b.needsGatewayRoutesWatchers() {
+		return nil
+	}
+
+	discovery := b.client.KubernetesInterface.Discovery()
+	authClient := b.client.KubernetesInterface
+
+	if hasKindGatewayApi("HTTPRoute", discovery) {
+		b.registerHTTPRouteWatchHandler(handlers, authClient)
+	}
+
+	if hasKindGatewayApi("GRPCRoute", discovery) {
+		b.registerGRPCRouteWatchHandler(handlers, authClient)
+	}
+
+	return nil
+}
+
+func (b *KubernetesClientBuilder) registerHTTPRouteWatchHandler(handlers *SharedWatchHandlers, authClient kubernetes.Interface) {
+	allowed, checked := canWatchGatewayResource(authClient, b.namespace, "httproutes")
+	if checked && !allowed {
+		logger.Warn("HTTPRoute API is available but ServiceAccount cannot watch httproutes in namespace '%s'; HTTPRoute cache watch is disabled", b.namespace)
+		return
+	}
+	restClient := gatewayRESTClient(b.client)
+	if restClient == nil {
+		logger.Warn("HTTPRoute cache is enabled but Gateway API REST client is not available; HTTPRoute watch is disabled")
+		return
+	}
+	if err := gatewayv1.Install(scheme.Scheme); err != nil {
+		logger.Errorf("failed to install Gateway API scheme for HTTPRoute watch: %v", err)
+		return
+	}
+	handlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, restClient)
+}
+
+func (b *KubernetesClientBuilder) registerGRPCRouteWatchHandler(handlers *SharedWatchHandlers, authClient kubernetes.Interface) {
+	allowed, checked := canWatchGatewayResource(authClient, b.namespace, "grpcroutes")
+	if checked && !allowed {
+		logger.Warn("GRPCRoute API is available but ServiceAccount cannot watch grpcroutes in namespace '%s'; GRPCRoute cache watch is disabled", b.namespace)
+		return
+	}
+	restClient := gatewayRESTClient(b.client)
+	if restClient == nil {
+		logger.Warn("GRPCRoute cache is enabled but Gateway API REST client is not available; GRPCRoute watch is disabled")
+		return
+	}
+	if err := gatewayv1.Install(scheme.Scheme); err != nil {
+		logger.Errorf("failed to install Gateway API scheme for GRPCRoute watch: %v", err)
+		return
+	}
+	handlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, restClient)
+}
+
+func gatewayRESTClient(client *backend.KubernetesApi) rest.Interface {
+	if client == nil || client.GatewayV1() == nil {
+		return nil
+	}
+	return client.GatewayV1().RESTClient()
+}
+
+func resolveGatewaySystemConfig(namespace, name string) (string, string) {
+	if namespace == "" {
+		namespace = "gateway-system"
+	}
+	if name == "" {
+		name = "default-external-gateway"
+	}
+	return namespace, name
+}
+
+func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
+	if b.namespace == "" {
+		return nil, fmt.Errorf("namespace cannot be empty")
+	}
+	if b.client == nil {
+		return nil, fmt.Errorf("client cannot be nil")
+	}
+	b.applyDefaults()
+
 	version, err := b.client.KubernetesInterface.Discovery().ServerVersion()
 	if err != nil {
 		return nil, err
@@ -209,20 +337,8 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		b.client.NetworkingV1().RESTClient(),
 		b.client.ExtensionsV1beta1().RESTClient(),
 	)
-	if hasKindGatewayApi("HTTPRoute", b.client.KubernetesInterface.Discovery()) {
-		err := gatewayv1.Install(scheme.Scheme)
-		if err != nil {
-			return nil, err
-		}
-		watchEventHandlers.WithHTTPRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
-	}
-
-	if hasKindGatewayApi("GRPCRoute", b.client.KubernetesInterface.Discovery()) {
-		err := gatewayv1.Install(scheme.Scheme)
-		if err != nil {
-			return nil, err
-		}
-		watchEventHandlers.WithGRPCRouteV1(b.watchExecutor, b.watchClientTimeout, b.client.GatewayV1().RESTClient())
+	if err := b.enrichWatchHandlersWithGatewayRoutes(watchEventHandlers); err != nil {
+		return nil, err
 	}
 
 	ctx := context.Background() //todo make all parent functions to pass context, this context will be able to cancel everything inside Kubernetes srv when it's no longer needed
@@ -230,6 +346,9 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	gatewaySystemNamespace, gatewaySystemName := resolveGatewaySystemConfig(b.gatewaySystemNamespace, b.gatewaySystemName)
+
 	return &Kubernetes{
 		initCacheOnce:          sync.Once{},
 		client:                 b.client,
@@ -242,6 +361,9 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		UseNetworkingV1Ingress: useNetworkingV1Ingress,
 		RolloutExecutor:        b.rolloutExecutor,
 		BG2Enabled:             b.bg2Enabled,
+		GatewaySystemType:      b.gatewaySystemType,
+		GatewaySystemNamespace: gatewaySystemNamespace,
+		GatewaySystemName:      gatewaySystemName,
 	}, nil
 }
 
