@@ -30,6 +30,12 @@ const (
 	AnnotationUpstreamVhost     = "nginx.ingress.kubernetes.io/upstream-vhost"
 	AnnotationProxyRedirectFrom = "nginx.ingress.kubernetes.io/proxy-redirect-from"
 	AnnotationProxyRedirectTo   = "nginx.ingress.kubernetes.io/proxy-redirect-to"
+	EnvoyExtensionWarning       = "requires EnvoyExtensionPolicy with Lua"
+	BackendTLSWarning           = "requires BackendTLSPolicy"
+	BackendTlsOrTrafficWarning  = "requires BackendTLSPolicy (for HTTPS) or BackendTrafficPolicy (for GRPC)."
+	SecurityPolicyWarning       = "requires SecurityPolicy"
+	TlsRouteWarning             = "requires TLSRoute instead of HTTPRoute"
+	ConfigSnippetWarning        = "requires manual conversion using RequestHeaderModifier/ResponseHeaderModifier filters"
 )
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
@@ -424,14 +430,14 @@ func (kube *Kubernetes) shouldIgnoreIngressForConverter() bool {
 
 func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]string) error {
 	criticalAnnotations := map[string]string{
-		AnnotationBackendProtocol:   "requires BackendTLSPolicy (for HTTPS) or BackendTrafficPolicy (for GRPC).",
-		AnnotationSecureBackends:    "requires BackendTLSPolicy.",
-		AnnotationAuthType:          "requires SecurityPolicy.",
-		AnnotationSSLPassthrough:    "requires TLSRoute instead of HTTPRoute. See GatewayAPIMigration.md section 12",
-		AnnotationConfigSnippet:     "requires manual conversion using RequestHeaderModifier/ResponseHeaderModifier filters.",
-		AnnotationUpstreamVhost:     "requires EnvoyExtensionPolicy with Lua.",
-		AnnotationProxyRedirectFrom: "requires EnvoyExtensionPolicy with Lua.",
-		AnnotationProxyRedirectTo:   "requires EnvoyExtensionPolicy with Lua.",
+		AnnotationBackendProtocol:   BackendTlsOrTrafficWarning,
+		AnnotationSecureBackends:    BackendTLSWarning,
+		AnnotationAuthType:          SecurityPolicyWarning,
+		AnnotationSSLPassthrough:    TlsRouteWarning,
+		AnnotationConfigSnippet:     ConfigSnippetWarning,
+		AnnotationUpstreamVhost:     EnvoyExtensionWarning,
+		AnnotationProxyRedirectFrom: EnvoyExtensionWarning,
+		AnnotationProxyRedirectTo:   EnvoyExtensionWarning,
 	}
 
 	for key, message := range criticalAnnotations {

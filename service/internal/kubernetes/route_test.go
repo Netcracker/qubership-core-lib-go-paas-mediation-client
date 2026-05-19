@@ -433,8 +433,8 @@ func Test_CreateRoute_GatewayAPIOnly_Error(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = "invalid-type"
 
 	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
@@ -447,8 +447,8 @@ func Test_DeleteRoute_GatewayAPIOnly_Error(t *testing.T) {
 	ctx := context.Background()
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = "invalid-type"
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
@@ -465,8 +465,8 @@ func Test_UpdateOrCreateRoute_GatewayAPIOnly_Error(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = "invalid-type"
 
 	_, err := kubeClient.UpdateOrCreateRoute(ctx, routeToCreate, testNamespace1)
@@ -492,8 +492,8 @@ func Test_CreateRoute_WithBothModesIgnoresIngress(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.UseNetworkingV1Ingress = true
 	kubeClient.GatewaySystemType = "legacy-ingress" // Only Ingress, no Gateway API
 
@@ -501,7 +501,6 @@ func Test_CreateRoute_WithBothModesIgnoresIngress(t *testing.T) {
 	assertions.Nil(err)
 	assertions.NotNil(route)
 
-	// Verify Ingress created without ignore annotation (since only legacy-ingress mode)
 	ingressList, err := kubeClientSet.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
 	assertions.Nil(err)
 	assertions.Equal(1, len(ingressList.Items))
@@ -528,8 +527,8 @@ func Test_ValidateAnnotationsForGatewayAPI_BackendProtocol(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = GatewayApiDefault
 
 	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
@@ -558,8 +557,8 @@ func Test_ValidateAnnotationsForGatewayAPI_SSLPassthrough(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = GatewayApiDefault
 
 	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
@@ -590,8 +589,8 @@ func Test_ValidateAnnotationsForGatewayAPI_AllowedAnnotations(t *testing.T) {
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.GatewaySystemType = LegacyIngress // Only Ingress mode - no validation
 
 	route, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
@@ -619,8 +618,8 @@ func Test_ValidateAnnotationsForGatewayAPI_LegacyIngressAllowsCritical(t *testin
 	}
 
 	kubeClientSet := fake.NewClientset()
-	cert_client := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	certClientSet := &certClient.Clientset{}
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
 	kubeClient.UseNetworkingV1Ingress = true
 	kubeClient.GatewaySystemType = LegacyIngress // Only Ingress - should NOT validate
 
