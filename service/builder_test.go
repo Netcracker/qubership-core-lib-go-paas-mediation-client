@@ -380,6 +380,25 @@ func TestPlatformClientBuilder_WithBasicCaches_Openshift311(t *testing.T) {
 	testBasicCaches(t, realClient.Kubernetes.Cache)
 }
 
+func TestPlatformClientBuilder_WithGatewaySystemConfig_k8s(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("kubernetes")
+	defer cleanUpEnv()
+
+	client, err := NewPlatformClientBuilder().
+		WithClients(prepareFakeClients()).
+		WithWatchExecutor(getTestWatchExecutor(t)).
+		WithGatewaySystemType(kubernetes.GatewayApiDefault).
+		WithGatewaySystemNamespace("custom-ns").
+		WithGatewaySystemName("custom-gateway").
+		Build()
+	r.NoError(err)
+	kube := getK8sEntityFromClient(client)
+	r.Equal(kubernetes.GatewayApiDefault, kube.GatewaySystem.Type)
+	r.Equal("custom-ns", kube.GatewaySystem.Namespace)
+	r.Equal("custom-gateway", kube.GatewaySystem.Name)
+}
+
 func TestPlatformClientBuilder_WithGatewayApiRoutesCaches_k8s(t *testing.T) {
 	r := require.New(t)
 	prepareEnv("kubernetes")
