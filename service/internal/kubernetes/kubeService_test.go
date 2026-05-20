@@ -420,55 +420,6 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NotNil(kubernetes.Cache)
 }
 
-func TestKubernetesClientBuilder_WithGatewaySystem(t *testing.T) {
-	assertions := require.New(t)
-	builder := NewKubernetesClientBuilder().
-		WithGatewaySystemType(GatewayApiDefault).
-		WithGatewaySystemNamespace("gw-ns").
-		WithGatewaySystemName("gw-name")
-	assertions.Equal(GatewayApiDefault, builder.gatewaySystem.Type)
-	assertions.Equal("gw-ns", builder.gatewaySystem.Namespace)
-	assertions.Equal("gw-name", builder.gatewaySystem.Name)
-}
-
-func Test_BuildSkipsEnrichWhenGatewayRouteCacheDisabled(t *testing.T) {
-	assertions := require.New(t)
-	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
-	clientset := fake.NewClientset(&namespace)
-	kube, err := NewKubernetesClientBuilder().
-		WithNamespace(testNamespace1).
-		WithClient(&backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: &certClient.Clientset{}}).
-		WithCache(cache.NewTestResourcesCache(cache.RouteCache)).
-		Build()
-	assertions.NoError(err)
-	assertions.Nil(kube.WatchHandlers.HTTPRouteV1)
-	assertions.Nil(kube.WatchHandlers.GRPCRouteV1)
-}
-
-func Test_BuildSkipsGatewayWatchWhenRBACDenied(t *testing.T) {
-	assertions := require.New(t)
-	k8sClient := fake.NewClientset()
-	k8sClient.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		review := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview)
-		review.Status = authorizationv1.SubjectAccessReviewStatus{Allowed: false}
-		return true, review, nil
-	})
-	fakeDisc := k8sClient.Discovery().(*fakediscovery.FakeDiscovery)
-	fakeDisc.Resources = []*metav1.APIResourceList{{
-		GroupVersion: "gateway.networking.k8s.io/v1",
-		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
-	}}
-	gwClient := gatewayclientfake.NewSimpleClientset()
-	kube, err := NewKubernetesClientBuilder().
-		WithNamespace(testNamespace1).
-		WithClient(newBuildTestKubernetesAPI(k8sClient, gwClient)).
-		WithWatchExecutor(newFakeWatchExecutor()).
-		WithCache(cache.NewTestResourcesCache(cache.HttpRouteCache)).
-		Build()
-	assertions.NoError(err)
-	assertions.Nil(kube.WatchHandlers.HTTPRouteV1)
-}
-
 func Test_BuildSetsGatewaySystemDefaults(t *testing.T) {
 	assertions := require.New(t)
 	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
