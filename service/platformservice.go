@@ -192,17 +192,21 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 	if builder.gatewaySystemNamespace != nil {
 		gatewaySystemNamespace = *builder.gatewaySystemNamespace
 	} else {
-		gatewaySystemNamespace = configloader.GetOrDefaultString("gateway.system.namespace", "gateway-system")
+		gatewaySystemNamespace = configloader.GetOrDefaultString("gateway.system.namespace", "")
 	}
-	kubeClientBuilder = kubeClientBuilder.WithGatewaySystemNamespace(gatewaySystemNamespace)
+	if gatewaySystemNamespace != "" {
+		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemNamespace(gatewaySystemNamespace)
+	}
 
 	var gatewaySystemName string
 	if builder.gatewaySystemName != nil {
 		gatewaySystemName = *builder.gatewaySystemName
 	} else {
-		gatewaySystemName = configloader.GetOrDefaultString("gateway.system.name", "default-external-gateway")
+		gatewaySystemName = configloader.GetOrDefaultString("gateway.system.name", "")
 	}
-	kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)
+	if gatewaySystemName != "" {
+		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)
+	}
 
 	kubeClient, err := kubeClientBuilder.Build()
 

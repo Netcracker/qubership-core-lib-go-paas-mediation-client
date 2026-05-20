@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
@@ -12,16 +11,16 @@ import (
 	networkingV1 "k8s.io/api/networking/v1"
 	paasErrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var BG2IngressClassName = "bg.mesh.netcracker.com"
-var IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
+
+const IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
 
 const (
-	LegacyIngress     = "legacy-ingress"
-	GatewayApiDefault = "gateway-api-default"
-
 	AnnotationBackendProtocol   = "nginx.ingress.kubernetes.io/backend-protocol"
 	AnnotationSecureBackends    = "nginx.ingress.kubernetes.io/secure-backends"
 	AnnotationAuthType          = "nginx.ingress.kubernetes.io/auth-type"
@@ -39,20 +38,17 @@ const (
 )
 
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
-	useGatewayAPI := kube.shouldUseGatewayAPI()
-	useLegacyIngress := kube.shouldCreateLegacyIngress()
+	useGatewayAPI := kube.GatewaySystem.ShouldUseGatewayAPI()
+	useLegacyIngress := kube.GatewaySystem.ShouldCreateLegacyIngress()
 
 	if !useGatewayAPI && !useLegacyIngress {
-		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route creation", kube.GatewaySystemType)
+		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route creation", kube.GatewaySystem.Type)
 	}
 
 	var result *entity.Route
 	var err error
 
 	if useGatewayAPI {
-		if err = kube.validateAnnotationsForGatewayAPI(route.Metadata.Annotations); err != nil {
-			return nil, err
-		}
 		result, err = kube.createHTTPRoute(ctx, route, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
@@ -68,7 +64,7 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 		ingress := route.ToIngressNetworkingV1()
 		kube.modifyIngressClassForBG2(ingress)
 
-		if kube.shouldIgnoreIngressForConverter() {
+		if kube.GatewaySystem.ShouldIgnoreIngressForConverter() {
 			if ingress.Annotations == nil {
 				ingress.Annotations = make(map[string]string)
 			}
@@ -93,7 +89,7 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 		ingress := route.ToIngress()
 		kube.modifyIngressClassForBG2(ingress)
 
-		if kube.shouldIgnoreIngressForConverter() {
+		if kube.GatewaySystem.ShouldIgnoreIngressForConverter() {
 			if ingress.Annotations == nil {
 				ingress.Annotations = make(map[string]string)
 			}
@@ -118,11 +114,11 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 }
 
 func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
-	useGatewayAPI := kube.shouldUseGatewayAPI()
-	useLegacyIngress := kube.shouldCreateLegacyIngress()
+	useGatewayAPI := kube.GatewaySystem.ShouldUseGatewayAPI()
+	useLegacyIngress := kube.GatewaySystem.ShouldCreateLegacyIngress()
 
 	if !useGatewayAPI && !useLegacyIngress {
-		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route update", kube.GatewaySystemType)
+		return nil, fmt.Errorf("GATEWAY_SYSTEM_TYPE=%s does not allow any Route update", kube.GatewaySystem.Type)
 	}
 
 	var result *entity.Route
@@ -133,7 +129,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 		originalHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Get(ctx, route.Name, v1.GetOptions{})
 		if err == nil {
 			httpRouteExists = true
-			httpRouteToUpdate := route.ToHTTPRoute(kube.GatewaySystemNamespace, kube.GatewaySystemName)
+			httpRouteToUpdate := route.ToHTTPRoute(kube.GatewaySystem.Namespace, kube.GatewaySystem.Name)
 			httpRouteToUpdate.ResourceVersion = originalHTTPRoute.ResourceVersion
 
 			updatedHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Update(ctx, httpRouteToUpdate, v1.UpdateOptions{})
@@ -170,7 +166,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 				}
 				kube.modifyIngressClassForBG2(ingressToUpdate)
 
-				if kube.shouldIgnoreIngressForConverter() {
+				if kube.GatewaySystem.ShouldIgnoreIngressForConverter() {
 					if ingressToUpdate.Annotations == nil {
 						ingressToUpdate.Annotations = make(map[string]string)
 					}
@@ -206,7 +202,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 				ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
 				kube.modifyIngressClassForBG2(ingressToUpdate)
 
-				if kube.shouldIgnoreIngressForConverter() {
+				if kube.GatewaySystem.ShouldIgnoreIngressForConverter() {
 					if ingressToUpdate.Annotations == nil {
 						ingressToUpdate.Annotations = make(map[string]string)
 					}
@@ -258,13 +254,13 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName string, namespace string) error {
 	var firstErr error
 
-	if kube.shouldUseGatewayAPI() {
+	if kube.GatewaySystem.ShouldUseGatewayAPI() {
 		if err := kube.deleteRouteHTTPRoute(ctx, routeName, namespace); err != nil {
 			firstErr = err
 		}
 	}
 
-	if kube.shouldCreateLegacyIngress() {
+	if kube.GatewaySystem.ShouldCreateLegacyIngress() {
 		if err := kube.deleteRouteLegacyIngress(ctx, routeName, namespace); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -406,28 +402,6 @@ func (kube *Kubernetes) modifyIngressClassForBG2(ingress any) {
 	}
 }
 
-func (kube *Kubernetes) shouldUseGatewayAPI() bool {
-	if kube.GatewaySystemType == "" {
-		return false
-	}
-	return strings.Contains(kube.GatewaySystemType, GatewayApiDefault)
-}
-
-func (kube *Kubernetes) shouldCreateLegacyIngress() bool {
-	if kube.GatewaySystemType == "" {
-		return true
-	}
-	return strings.Contains(kube.GatewaySystemType, LegacyIngress)
-}
-
-func (kube *Kubernetes) shouldIgnoreIngressForConverter() bool {
-	if kube.GatewaySystemType == "" {
-		return false
-	}
-	return strings.Contains(kube.GatewaySystemType, LegacyIngress) &&
-		strings.Contains(kube.GatewaySystemType, GatewayApiDefault)
-}
-
 func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]string) error {
 	criticalAnnotations := map[string]string{
 		AnnotationBackendProtocol:   BackendTlsOrTrafficWarning,
@@ -440,19 +414,34 @@ func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]
 		AnnotationProxyRedirectTo:   EnvoyExtensionWarning,
 	}
 
+	var fieldErrors field.ErrorList
 	for key, message := range criticalAnnotations {
-		if val, exists := annotations[key]; exists && val != "" {
-			return fmt.Errorf("annotation '%s' is not supported for HTTPRoute creation: %s", key, message)
+		if val := annotations[key]; val != "" {
+			fieldErrors = append(fieldErrors, field.Invalid(
+				field.NewPath("metadata", "annotations").Key(key),
+				val,
+				fmt.Sprintf("not supported for HTTPRoute creation: %s", message),
+			))
 		}
 	}
-
-	return nil
+	if len(fieldErrors) == 0 {
+		return nil
+	}
+	return paasErrors.NewInvalid(
+		schema.GroupKind{Group: gatewayv1.GroupName, Kind: "HTTPRoute"},
+		"",
+		fieldErrors,
+	)
 }
 
 func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
+	if err := kube.validateAnnotationsForGatewayAPI(route.Metadata.Annotations); err != nil {
+		return nil, err
+	}
+
 	httpRoute := route.ToHTTPRoute(
-		kube.GatewaySystemNamespace,
-		kube.GatewaySystemName,
+		kube.GatewaySystem.Namespace,
+		kube.GatewaySystem.Name,
 	)
 
 	createdHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Create(ctx, httpRoute, v1.CreateOptions{})

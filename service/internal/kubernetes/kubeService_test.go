@@ -22,13 +22,65 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
+	gatewayv1client "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
+
+type gatewayClientWithREST struct {
+	gatewayclient.Interface
+	restClient rest.Interface
+}
+
+func (c *gatewayClientWithREST) GatewayV1() gatewayv1client.GatewayV1Interface {
+	return &gatewayV1ClientWithREST{
+		GatewayV1Interface: c.Interface.GatewayV1(),
+		restClient:         c.restClient,
+	}
+}
+
+type gatewayV1ClientWithREST struct {
+	gatewayv1client.GatewayV1Interface
+	restClient rest.Interface
+}
+
+func (c *gatewayV1ClientWithREST) RESTClient() rest.Interface {
+	return c.restClient
+}
+
+func newTestGatewayRESTClient() rest.Interface {
+	cfg := &rest.Config{
+		Host: "https://127.0.0.1:6443",
+		ContentConfig: rest.ContentConfig{
+			GroupVersion:         &schema.GroupVersion{Group: gatewayv1.GroupName, Version: gatewayv1.GroupVersion.Version},
+			NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
+		},
+	}
+	restClient, err := rest.RESTClientFor(cfg)
+	if err != nil {
+		panic(err)
+	}
+	return restClient
+}
+
+func newBuildTestKubernetesAPI(k8sClient *fake.Clientset, gwClient gatewayclient.Interface) *backend.KubernetesApi {
+	return &backend.KubernetesApi{
+		KubernetesInterface:  k8sClient,
+		CertmanagerInterface: &certClient.Clientset{},
+		GatewayInterface: &gatewayClientWithREST{
+			Interface:  gwClient,
+			restClient: newTestGatewayRESTClient(),
+		},
+	}
+}
 
 func prependAllowedGatewayWatchReactor(client *fake.Clientset) {
 	client.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -368,6 +420,19 @@ func Test_WithoutCache(t *testing.T) {
 	assertions.NotNil(kubernetes.Cache)
 }
 
+func Test_BuildSetsGatewaySystemDefaults(t *testing.T) {
+	assertions := require.New(t)
+	namespace := v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace1}}
+	clientset := fake.NewClientset(&namespace)
+	kube, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: &certClient.Clientset{}}).
+		Build()
+	assertions.NoError(err)
+	assertions.Equal(DefaultGatewaySystemNamespace, kube.GatewaySystem.Namespace)
+	assertions.Equal(DefaultGatewaySystemName, kube.GatewaySystem.Name)
+}
+
 func Test_BuildSkipsGatewayHTTPRouteWatchHandlersWithoutCache(t *testing.T) {
 	assertions := require.New(t)
 	k8sClient := fake.NewClientset()
@@ -395,19 +460,14 @@ func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
 		APIResources: []metav1.APIResource{{Kind: "HTTPRoute"}},
 	}}
 	gwClient := gatewayclientfake.NewSimpleClientset()
-	builder := NewKubernetesClientBuilder().
+	kube, err := NewKubernetesClientBuilder().
 		WithNamespace(testNamespace1).
-		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
-		WithCache(cache.NewTestResourcesCache(cache.HttpRouteCache))
-	builder.applyDefaults()
-	handlers := NewSharedWatchEventHandlers(builder.watchExecutor, builder.watchClientTimeout,
-		k8sClient.CoreV1().RESTClient(),
-		builder.client.CertmanagerV1().RESTClient(),
-		k8sClient.NetworkingV1().RESTClient(),
-		k8sClient.ExtensionsV1beta1().RESTClient(),
-	)
-	assertions.NoError(builder.enrichWatchHandlersWithGatewayRoutes(handlers))
-	assertions.NotNil(handlers.HTTPRouteV1)
+		WithClient(newBuildTestKubernetesAPI(k8sClient, gwClient)).
+		WithWatchExecutor(newFakeWatchExecutor()).
+		WithCache(cache.NewTestResourcesCache(cache.HttpRouteCache)).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.HTTPRouteV1)
 }
 
 func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
@@ -420,19 +480,14 @@ func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {
 		APIResources: []metav1.APIResource{{Kind: "GRPCRoute"}},
 	}}
 	gwClient := gatewayclientfake.NewSimpleClientset()
-	builder := NewKubernetesClientBuilder().
+	kube, err := NewKubernetesClientBuilder().
 		WithNamespace(testNamespace1).
-		WithClient(&backend.KubernetesApi{KubernetesInterface: k8sClient, CertmanagerInterface: &certClient.Clientset{}, GatewayInterface: gwClient}).
-		WithCache(cache.NewTestResourcesCache(cache.GrpcRouteCache))
-	builder.applyDefaults()
-	handlers := NewSharedWatchEventHandlers(builder.watchExecutor, builder.watchClientTimeout,
-		k8sClient.CoreV1().RESTClient(),
-		builder.client.CertmanagerV1().RESTClient(),
-		k8sClient.NetworkingV1().RESTClient(),
-		k8sClient.ExtensionsV1beta1().RESTClient(),
-	)
-	assertions.NoError(builder.enrichWatchHandlersWithGatewayRoutes(handlers))
-	assertions.NotNil(handlers.GRPCRouteV1)
+		WithClient(newBuildTestKubernetesAPI(k8sClient, gwClient)).
+		WithWatchExecutor(newFakeWatchExecutor()).
+		WithCache(cache.NewTestResourcesCache(cache.GrpcRouteCache)).
+		Build()
+	assertions.NoError(err)
+	assertions.NotNil(kube.WatchHandlers.GRPCRouteV1)
 }
 
 func Test_GetHttpRouteList_success(t *testing.T) {

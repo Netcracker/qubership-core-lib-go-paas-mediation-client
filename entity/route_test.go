@@ -617,30 +617,31 @@ func TestBuildSessionPersistence(t *testing.T) {
 
 func TestBuildTimeouts(t *testing.T) {
 	tests := []struct {
-		name        string
-		annotations map[string]string
-		expectNil   bool
+		name            string
+		annotations     map[string]string
+		expectNil       bool
+		expectedRequest string
 	}{
 		{
 			name: "With proxy-read-timeout",
 			annotations: map[string]string{
 				AnnotationProxyReadTimeout: "1800",
 			},
-			expectNil: false,
+			expectedRequest: "1800s",
 		},
 		{
 			name: "With proxy-send-timeout",
 			annotations: map[string]string{
 				AnnotationProxySendTimeout: "900",
 			},
-			expectNil: false,
+			expectedRequest: "900s",
 		},
 		{
-			name: "With proxy-connect-timeout",
+			name: "With proxy-connect-timeout only",
 			annotations: map[string]string{
 				AnnotationProxyConnectTimeout: "600",
 			},
-			expectNil: false,
+			expectNil: true,
 		},
 		{
 			name:        "Without timeout annotations",
@@ -654,9 +655,11 @@ func TestBuildTimeouts(t *testing.T) {
 			timeouts := buildTimeouts(tt.annotations)
 			if tt.expectNil {
 				assert.Nil(t, timeouts)
-			} else {
-				assert.NotNil(t, timeouts)
+				return
 			}
+			assert.NotNil(t, timeouts)
+			assert.NotNil(t, timeouts.Request)
+			assert.Equal(t, tt.expectedRequest, string(*timeouts.Request))
 		})
 	}
 }

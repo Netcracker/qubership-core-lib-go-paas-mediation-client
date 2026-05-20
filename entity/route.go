@@ -363,31 +363,23 @@ func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPe
 }
 
 func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
-	var hasTimeouts bool
-	timeoutKeys := []string{
-		"nginx.ingress.kubernetes.io/proxy-read-timeout",
-		"nginx.ingress.kubernetes.io/proxy-send-timeout",
-		"nginx.ingress.kubernetes.io/proxy-connect-timeout",
-	}
-	for _, key := range timeoutKeys {
-		if _, exists := annotations[key]; exists {
-			hasTimeouts = true
-			break
-		}
+	if connectTimeout, exists := annotations[AnnotationProxyConnectTimeout]; exists && connectTimeout != "" {
+		logger.Warn("annotation %s=%s requires BackendTrafficPolicy and is not applied to HTTPRoute", AnnotationProxyConnectTimeout, connectTimeout)
 	}
 
-	if !hasTimeouts {
+	requestTimeoutValue := ""
+	if readTimeout, exists := annotations[AnnotationProxyReadTimeout]; exists && readTimeout != "" {
+		requestTimeoutValue = readTimeout
+	} else if sendTimeout, exists := annotations[AnnotationProxySendTimeout]; exists && sendTimeout != "" {
+		requestTimeoutValue = sendTimeout
+	}
+
+	if requestTimeoutValue == "" {
 		return nil
 	}
 
-	timeouts := &gatewayv1.HTTPRouteTimeouts{}
-
-	if readTimeout, exists := annotations[AnnotationProxyReadTimeout]; exists && readTimeout != "" {
-		timeout := gatewayv1.Duration(readTimeout + "s")
-		timeouts.Request = &timeout
-	}
-
-	return timeouts
+	timeout := gatewayv1.Duration(requestTimeoutValue + "s")
+	return &gatewayv1.HTTPRouteTimeouts{Request: &timeout}
 }
 
 func RouteFromHTTPRouteGatewayV1(httpRoute *gatewayv1.HTTPRoute) *Route {
