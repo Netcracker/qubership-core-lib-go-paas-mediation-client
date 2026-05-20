@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -13,14 +12,11 @@ import (
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/internal/cache"
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	"github.com/stretchr/testify/require"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	fakeWatch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/kubernetes"
+	gatewayv1 "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 func TestCacheAdapters(t *testing.T) {
@@ -31,6 +27,8 @@ func TestCacheAdapters(t *testing.T) {
 		cache.ServiceCache,
 		cache.SecretCache,
 		cache.RouteCache,
+		cache.HttpRouteCache,
+		cache.GrpcRouteCache,
 		//cache.CertificateCache, //todo not supported yet
 	} {
 
@@ -42,16 +40,16 @@ func TestCacheAdapters(t *testing.T) {
 			0: func() (fakeWatch.Interface, error) { return watchExecutor1, nil },
 		}}
 
-		clientset := fake.NewClientset()
+		clientset := &kubernetes.Clientset{}
 		cert_client := &certClient.Clientset{}
-		gatewayREST := clientset.CoreV1().RESTClient()
+		gatewayClient := &gatewayv1.GatewayV1Client{}
 		watchHandlers := NewSharedWatchEventHandlers(watchExecutor, watchTimeout,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient())
-		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayREST)
-		watchHandlers.WithGRPCRouteV1(watchExecutor, watchTimeout, gatewayREST)
+		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
+		watchHandlers.WithGRPCRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
 		resourcesCache := cache.NewTestResourcesCache(cacheType)
 		cacheAdapters, err := NewCacheAdapters(ctx, testNamespace1, resourcesCache, watchHandlers)
 		assertions.NoError(err)
@@ -95,22 +93,22 @@ func TestCacheAdapters(t *testing.T) {
 			resourceCache := resourcesCache.Certificates
 			assertions.NotNil(resourceCache)
 			testCacheAdapter(ctx, t, testResourceName, resourceAdded, resourceModified, resourceDeleted, entity.NewCertificate, resourceCache, watchExecutor1)
+		case cache.HttpRouteCache:
+			resourceAdded := createHttpRoute(testResourceName, 1, "1")
+			resourceModified := createHttpRoute(testResourceName, 2, "2")
+			resourceDeleted := createHttpRoute(testResourceName, 2, "3")
+			resourceCache := resourcesCache.HTTPRoute
+			assertions.NotNil(resourceCache)
+			testCacheAdapter(ctx, t, testResourceName, resourceAdded, resourceModified, resourceDeleted, entity.RouteFromHTTPRoute, resourceCache, watchExecutor1)
+		case cache.GrpcRouteCache:
+			resourceAdded := createGrpcRoute(testResourceName, 1, "1")
+			resourceModified := createGrpcRoute(testResourceName, 2, "2")
+			resourceDeleted := createGrpcRoute(testResourceName, 2, "3")
+			resourceCache := resourcesCache.GRPCRoute
+			assertions.NotNil(resourceCache)
+			testCacheAdapter(ctx, t, testResourceName, resourceAdded, resourceModified, resourceDeleted, entity.RouteFromGRPCRoute, resourceCache, watchExecutor1)
 		}
 	}
-}
-
-func testGatewayRESTClient(t *testing.T) rest.Interface {
-	t.Helper()
-	cfg := &rest.Config{
-		Host: "https://127.0.0.1:6443",
-		ContentConfig: rest.ContentConfig{
-			GroupVersion:         &schema.GroupVersion{Group: "gateway.networking.k8s.io", Version: "v1"},
-			NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
-		},
-	}
-	restClient, err := rest.RESTClientFor(cfg)
-	require.NoError(t, err)
-	return restClient
 }
 
 func testCacheAdapter[F runtime.Object, T entity.HasMetadata](
@@ -162,32 +160,4 @@ func waitUntilPresent(timeout time.Duration, targetFunc func() bool) bool {
 			}
 		}
 	}
-}
-
-func TestStartGatewayRouteCacheAdapter_Forbidden(t *testing.T) {
-	ctx := context.Background()
-	watchExecutor := &testWatchExecutor{mutex: &sync.Mutex{}, watchers: map[int]watchReturnFunc{
-		0: func() (watch.Interface, error) {
-			return nil, apierrors.NewForbidden(
-				schema.GroupResource{Resource: "httproutes"},
-				"test",
-				errors.New("forbidden"),
-			)
-		},
-	}}
-
-	clientset := fake.NewClientset()
-	certClientSet := &certClient.Clientset{}
-	watchHandlers := NewSharedWatchEventHandlers(watchExecutor, watchTimeout,
-		clientset.CoreV1().RESTClient(),
-		certClientSet.CertmanagerV1().RESTClient(),
-		clientset.NetworkingV1().RESTClient(),
-		clientset.ExtensionsV1beta1().RESTClient(),
-	)
-	watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, testGatewayRESTClient(t))
-
-	resourcesCache := cache.NewTestResourcesCache(cache.HttpRouteCache)
-	adapter, err := startGatewayRouteCacheAdapter(ctx, testNamespace1, resourcesCache.HTTPRoute, watchHandlers.HTTPRouteV1, "httproutes")
-	require.NoError(t, err)
-	require.Nil(t, adapter)
 }
