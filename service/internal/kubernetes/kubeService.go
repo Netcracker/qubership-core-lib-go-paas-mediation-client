@@ -244,34 +244,25 @@ func canWatchGatewayResource(client kubernetes.Interface, namespace, resource st
 	return result.Status.Allowed, true
 }
 
-type gatewayRouteRegistrar func(handlers *SharedWatchHandlers, executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface)
-
 func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers *SharedWatchHandlers) error {
 	kubeDiscovery := b.client.KubernetesInterface.Discovery()
 	authClient := b.client.KubernetesInterface
 
 	if hasKindGatewayApi("HTTPRoute", kubeDiscovery) {
-		b.registerGatewayRouteWatchHandler(handlers, authClient, "HTTPRoute", "httproutes",
-			func(h *SharedWatchHandlers, executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface) {
-				h.WithHTTPRouteV1(executor, clientTimeout, restClient)
-			})
+		b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", handlers.WithHTTPRouteV1)
 	}
 
 	if hasKindGatewayApi("GRPCRoute", kubeDiscovery) {
-		b.registerGatewayRouteWatchHandler(handlers, authClient, "GRPCRoute", "grpcroutes",
-			func(h *SharedWatchHandlers, executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface) {
-				h.WithGRPCRouteV1(executor, clientTimeout, restClient)
-			})
+		b.registerGatewayRouteWatchHandler(authClient, "GRPCRoute", "grpcroutes", handlers.WithGRPCRouteV1)
 	}
 
 	return nil
 }
 
 func (b *KubernetesClientBuilder) registerGatewayRouteWatchHandler(
-	handlers *SharedWatchHandlers,
 	authClient kubernetes.Interface,
 	kind, resource string,
-	register gatewayRouteRegistrar,
+	register func(executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface),
 ) {
 	allowed, checked := canWatchGatewayResource(authClient, b.namespace, resource)
 	if checked && !allowed {
@@ -288,7 +279,7 @@ func (b *KubernetesClientBuilder) registerGatewayRouteWatchHandler(
 		logger.Errorf("failed to install Gateway API scheme for %s watch: %v", kind, err)
 		return
 	}
-	register(handlers, b.watchExecutor, b.watchClientTimeout, restClient)
+	register(b.watchExecutor, b.watchClientTimeout, restClient)
 }
 
 func gatewayRESTClient(client *backend.KubernetesApi) rest.Interface {
