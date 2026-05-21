@@ -114,99 +114,103 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 	if useGatewayAPI {
 		originalHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Get(ctx, route.Name, v1.GetOptions{})
 		if err != nil {
-			if !paasErrors.IsNotFound(err) {
-				logger.ErrorC(ctx, "Error to get HTTPRoute before update: %+v", err)
-				return nil, err
+			if paasErrors.IsNotFound(err) {
+				logger.WarnC(ctx, "HTTPRoute %s not found. Creating new", route.Name)
+				return kube.CreateRoute(ctx, route, namespace)
 			}
-		} else {
-			httpRouteExists = true
-			httpRouteToUpdate := route.ToHTTPRoute(kube.GatewaySystem.Namespace, kube.GatewaySystem.Name)
-			httpRouteToUpdate.ResourceVersion = originalHTTPRoute.ResourceVersion
-
-			updatedHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Update(ctx, httpRouteToUpdate, v1.UpdateOptions{})
-			if err != nil {
-				logger.ErrorC(ctx, "Error to update HTTPRoute: %+v", err)
-				return nil, err
-			}
-			logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
-
-			routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
-			if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
-				httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
-				_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
-				if err != nil {
-					return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)
-				}
-			}
-			result = routeFromHTTPRoute
+			logger.ErrorC(ctx, "Error to get HTTPRoute before update: %+v", err)
+			return nil, err
 		}
+		httpRouteExists = true
+		httpRouteToUpdate := route.ToHTTPRoute(kube.GatewaySystem.Namespace, kube.GatewaySystem.Name)
+		httpRouteToUpdate.ResourceVersion = originalHTTPRoute.ResourceVersion
+
+		updatedHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Update(ctx, httpRouteToUpdate, v1.UpdateOptions{})
+		if err != nil {
+			logger.ErrorC(ctx, "Error to update HTTPRoute: %+v", err)
+			return nil, err
+		}
+		logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
+
+		routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
+		if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
+			httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
+			_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)
+			}
+		}
+		result = routeFromHTTPRoute
 	}
 
 	if useLegacyIngress {
 		if kube.UseNetworkingV1Ingress {
 			originalIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
 			if err != nil {
-				if !paasErrors.IsNotFound(err) {
-					logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
-					return nil, err
+				if paasErrors.IsNotFound(err) {
+					logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
+					return kube.CreateRoute(ctx, route, namespace)
 				}
-			} else {
-				ingressExists = true
-				ingressToUpdate := route.ToIngressNetworkingV1()
-				ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
-				if className := ingressToUpdate.Spec.IngressClassName; className == nil || *className == "" {
-					ingressToUpdate.Spec.IngressClassName = originalIngress.Spec.IngressClassName
-				}
-				kube.configureIngress(ingressToUpdate)
+				logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
+				return nil, err
+			}
 
-				updatedIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+			ingressExists = true
+			ingressToUpdate := route.ToIngressNetworkingV1()
+			ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
+			if className := ingressToUpdate.Spec.IngressClassName; className == nil || *className == "" {
+				ingressToUpdate.Spec.IngressClassName = originalIngress.Spec.IngressClassName
+			}
+			kube.configureIngress(ingressToUpdate)
+
+			updatedIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+			if err != nil {
+				logger.ErrorC(ctx, "Error to update ingress: %+v", err)
+				return nil, err
+			}
+			logger.InfoC(ctx, "Ingress updated: %s", route.Name)
+
+			ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(updatedIngress)
+			if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
+				_, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
 				if err != nil {
-					logger.ErrorC(ctx, "Error to update ingress: %+v", err)
-					return nil, err
+					return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
 				}
-				logger.InfoC(ctx, "Ingress updated: %s", route.Name)
-
-				ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(updatedIngress)
-				if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
-					_, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
-					if err != nil {
-						return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
-					}
-				}
-				if result == nil {
-					result = ingressNetworkingV1
-				}
+			}
+			if result == nil {
+				result = ingressNetworkingV1
 			}
 		} else {
 			originalIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Get(ctx, route.Name, v1.GetOptions{})
 			if err != nil {
-				if !paasErrors.IsNotFound(err) {
-					logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
-					return nil, err
+				if paasErrors.IsNotFound(err) {
+					logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
+					return kube.CreateRoute(ctx, route, namespace)
 				}
-			} else {
-				ingressExists = true
-				ingressToUpdate := route.ToIngress()
-				ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
-				kube.configureIngress(ingressToUpdate)
+				logger.ErrorC(ctx, "Error to get ingress before update: %+v", err)
+				return nil, err
+			}
+			ingressExists = true
+			ingressToUpdate := route.ToIngress()
+			ingressToUpdate.ResourceVersion = originalIngress.ResourceVersion
+			kube.configureIngress(ingressToUpdate)
 
-				updatedIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+			updatedIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Update(ctx, ingressToUpdate, v1.UpdateOptions{})
+			if err != nil {
+				logger.ErrorC(ctx, "Error to update ingress: %+v", err)
+				return nil, err
+			}
+			logger.InfoC(ctx, "Ingress updated: %s", route.Name)
+
+			routeFromIngress := entity.RouteFromIngress(updatedIngress)
+			if kube.Cache.Ingresses != nil && routeFromIngress != nil {
+				_, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
 				if err != nil {
-					logger.ErrorC(ctx, "Error to update ingress: %+v", err)
-					return nil, err
+					return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
 				}
-				logger.InfoC(ctx, "Ingress updated: %s", route.Name)
-
-				routeFromIngress := entity.RouteFromIngress(updatedIngress)
-				if kube.Cache.Ingresses != nil && routeFromIngress != nil {
-					_, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
-					if err != nil {
-						return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
-					}
-				}
-				if result == nil {
-					result = routeFromIngress
-				}
+			}
+			if result == nil {
+				result = routeFromIngress
 			}
 		}
 	}
