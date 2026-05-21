@@ -278,17 +278,10 @@ func normalizeRouteAnnotations(annotations map[string]string) map[string]string 
 }
 
 func pathMatchTypeFromRoute(pathType string) gatewayv1.PathMatchType {
-	if pathType == "" {
-		return gatewayv1.PathMatchPathPrefix
-	}
-	switch pathType {
-	case "Exact":
+	if pathType == "Exact" {
 		return gatewayv1.PathMatchExact
-	case "Prefix", "ImplementationSpecific":
-		return gatewayv1.PathMatchPathPrefix
-	default:
-		return gatewayv1.PathMatchPathPrefix
 	}
+	return gatewayv1.PathMatchPathPrefix
 }
 
 func routePathValue(path string) string {
