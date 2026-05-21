@@ -182,7 +182,7 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 	if builder.gatewaySystemType != nil {
 		gatewaySystemType = *builder.gatewaySystemType
 	} else {
-		gatewaySystemType = configloader.GetOrDefaultString("gateway.system.type", "")
+		gatewaySystemType = configloader.GetOrDefaultString(kubernetes.GatewaySystemTypeProperty, "")
 	}
 	if gatewaySystemType != "" {
 		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemType(gatewaySystemType)
@@ -192,7 +192,7 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 	if builder.gatewaySystemNamespace != nil {
 		gatewaySystemNamespace = *builder.gatewaySystemNamespace
 	} else {
-		gatewaySystemNamespace = configloader.GetOrDefaultString("gateway.system.namespace", "")
+		gatewaySystemNamespace = configloader.GetOrDefaultString(kubernetes.GatewaySystemNamespaceProperty, "")
 	}
 	if gatewaySystemNamespace != "" {
 		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemNamespace(gatewaySystemNamespace)
@@ -202,7 +202,7 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 	if builder.gatewaySystemName != nil {
 		gatewaySystemName = *builder.gatewaySystemName
 	} else {
-		gatewaySystemName = configloader.GetOrDefaultString("gateway.system.name", "")
+		gatewaySystemName = configloader.GetOrDefaultString(kubernetes.GatewaySystemNameProperty, "")
 	}
 	if gatewaySystemName != "" {
 		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)

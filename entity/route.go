@@ -363,14 +363,14 @@ func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPe
 }
 
 func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
-	if connectTimeout, exists := annotations[AnnotationProxyConnectTimeout]; exists && connectTimeout != "" {
+	if connectTimeout := annotations[AnnotationProxyConnectTimeout]; connectTimeout != "" {
 		logger.Warn("annotation %s=%s requires BackendTrafficPolicy and is not applied to HTTPRoute", AnnotationProxyConnectTimeout, connectTimeout)
 	}
 
 	requestTimeoutValue := ""
-	if readTimeout, exists := annotations[AnnotationProxyReadTimeout]; exists && readTimeout != "" {
+	if readTimeout := annotations[AnnotationProxyReadTimeout]; readTimeout != "" {
 		requestTimeoutValue = readTimeout
-	} else if sendTimeout, exists := annotations[AnnotationProxySendTimeout]; exists && sendTimeout != "" {
+	} else if sendTimeout := annotations[AnnotationProxySendTimeout]; sendTimeout != "" {
 		requestTimeoutValue = sendTimeout
 	}
 

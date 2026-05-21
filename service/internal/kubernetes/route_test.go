@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
@@ -605,72 +604,6 @@ func Test_CreateRoute_LegacyIngressOnly_NoIgnoreAnnotation(t *testing.T) {
 	assertions.Empty(ingressList.Items[0].Annotations[IgnoreApiConverterAnnotation])
 }
 
-func Test_ValidateAnnotationsForGatewayAPI_BackendProtocol(t *testing.T) {
-	assertions := require.New(t)
-	ctx := context.Background()
-
-	routeToCreate := &entity.Route{
-		Metadata: entity.Metadata{
-			Name:      testIngress,
-			Namespace: testNamespace1,
-			Annotations: map[string]string{
-				AnnotationBackendProtocol: "HTTPS",
-			},
-		},
-		Spec: entity.RouteSpec{
-			Host:    "test.example.com",
-			Service: entity.Target{Name: "test-service"},
-			Port:    entity.RoutePort{TargetPort: 8080},
-		},
-	}
-
-	kubeClientSet := fake.NewClientset()
-	certClientSet := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
-	kubeClient.GatewaySystem.Type = GatewayApiDefault
-
-	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
-	assertions.NotNil(err)
-	assertions.True(paasErrors.IsInvalid(err))
-	var statusErr *paasErrors.StatusError
-	assertions.ErrorAs(err, &statusErr)
-	assertions.Equal(http.StatusUnprocessableEntity, int(statusErr.Status().Code))
-	assertions.Contains(statusErr.Status().Message, "backend-protocol")
-}
-
-func Test_ValidateAnnotationsForGatewayAPI_SSLPassthrough(t *testing.T) {
-	assertions := require.New(t)
-	ctx := context.Background()
-
-	routeToCreate := &entity.Route{
-		Metadata: entity.Metadata{
-			Name:      testIngress,
-			Namespace: testNamespace1,
-			Annotations: map[string]string{
-				AnnotationSSLPassthrough: "true",
-			},
-		},
-		Spec: entity.RouteSpec{
-			Host:    "test.example.com",
-			Service: entity.Target{Name: "test-service"},
-			Port:    entity.RoutePort{TargetPort: 8080},
-		},
-	}
-
-	kubeClientSet := fake.NewClientset()
-	certClientSet := &certClient.Clientset{}
-	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: certClientSet})
-	kubeClient.GatewaySystem.Type = GatewayApiDefault
-
-	_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
-	assertions.NotNil(err)
-	assertions.True(paasErrors.IsInvalid(err))
-	var statusErr *paasErrors.StatusError
-	assertions.ErrorAs(err, &statusErr)
-	assertions.Equal(http.StatusUnprocessableEntity, int(statusErr.Status().Code))
-	assertions.Contains(statusErr.Status().Message, "ssl-passthrough")
-}
-
 func Test_ValidateAnnotationsForGatewayAPI_AllowedAnnotations(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
@@ -730,6 +663,34 @@ func Test_ValidateAnnotationsForGatewayAPI_LegacyIngressAllowsCritical(t *testin
 	route, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
 	assertions.Nil(err) // No error because legacy-ingress doesn't validate
 	assertions.NotNil(route)
+}
+
+func Test_validateAnnotationsForGatewayAPI_ReferencesAllConstants(t *testing.T) {
+	assertions := require.New(t)
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
+		KubernetesInterface:  fake.NewClientset(),
+		CertmanagerInterface: &certClient.Clientset{},
+	})
+
+	cases := map[string]string{
+		AnnotationBackendProtocol:   BackendTlsOrTrafficWarning,
+		AnnotationSecureBackends:    BackendTLSWarning,
+		AnnotationAuthType:          SecurityPolicyWarning,
+		AnnotationSSLPassthrough:    TlsRouteWarning,
+		AnnotationConfigSnippet:     ConfigSnippetWarning,
+		AnnotationUpstreamVhost:     EnvoyExtensionWarning,
+		AnnotationProxyRedirectFrom: EnvoyExtensionWarning,
+		AnnotationProxyRedirectTo:   EnvoyExtensionWarning,
+	}
+	for annotation, warning := range cases {
+		err := kubeClient.validateAnnotationsForGatewayAPI(map[string]string{annotation: "test-value"})
+		assertions.Error(err, "annotation %s", annotation)
+		assertions.True(paasErrors.IsInvalid(err))
+		var statusErr *paasErrors.StatusError
+		assertions.ErrorAs(err, &statusErr)
+		assertions.Contains(statusErr.Status().Message, warning)
+	}
+	assertions.Equal("gateway-api-converter.netcracker.com/ignore", IgnoreApiConverterAnnotation)
 }
 
 func newTinyRouteCache(t *testing.T, caches ...cache.CacheName) *cache.ResourcesCache {
@@ -921,56 +882,216 @@ func Test_CreateRoute_DualMode_V1beta1_SetsIgnoreAnnotationOnNilAnnotations(t *t
 	assertions.Equal("true", ingressList.Items[0].Annotations[IgnoreApiConverterAnnotation])
 }
 
-func Test_ValidateAnnotationsForGatewayAPI_CriticalAnnotations(t *testing.T) {
-	tests := []struct {
-		name       string
-		annotation string
-		value      string
-		message    string
-	}{
-		{"backend protocol", AnnotationBackendProtocol, "HTTPS", BackendTlsOrTrafficWarning},
-		{"secure backends", AnnotationSecureBackends, "true", BackendTLSWarning},
-		{"auth type", AnnotationAuthType, "basic", SecurityPolicyWarning},
-		{"ssl passthrough", AnnotationSSLPassthrough, "true", TlsRouteWarning},
-		{"config snippet", AnnotationConfigSnippet, "more_set_headers", ConfigSnippetWarning},
-		{"upstream vhost", AnnotationUpstreamVhost, "example.com", EnvoyExtensionWarning},
-		{"proxy redirect from", AnnotationProxyRedirectFrom, "/a", EnvoyExtensionWarning},
-		{"proxy redirect to", AnnotationProxyRedirectTo, "/b", EnvoyExtensionWarning},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertions := require.New(t)
-			ctx := context.Background()
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_HTTPRouteUpdateError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  fake.NewClientset(),
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+		}).
+		WithGatewaySystemType(GatewayApiDefault).
+		Build()
+	require.NoError(t, err)
 
-			routeToCreate := &entity.Route{
-				Metadata: entity.Metadata{
-					Name:      testIngress,
-					Namespace: testNamespace1,
-					Annotations: map[string]string{
-						tt.annotation: tt.value,
-					},
-				},
-				Spec: entity.RouteSpec{
-					Host:    "test.example.com",
-					Service: entity.Target{Name: "test-service"},
-					Port:    entity.RoutePort{TargetPort: 8080},
-				},
-			}
+	route := dualModeTestRoute()
+	_, err = kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
 
-			kubeClientSet := fake.NewClientset()
-			certClientSet := &certClient.Clientset{}
-			kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
-				KubernetesInterface:  kubeClientSet,
-				CertmanagerInterface: certClientSet,
-			})
-			kubeClient.GatewaySystem.Type = GatewayApiDefault
+	gwClient.PrependReactor("update", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("httproute update failed")
+	})
 
-			_, err := kubeClient.CreateRoute(ctx, routeToCreate, testNamespace1)
-			assertions.Error(err)
-			assertions.True(paasErrors.IsInvalid(err))
-			var statusErr *paasErrors.StatusError
-			assertions.ErrorAs(err, &statusErr)
-			assertions.Contains(statusErr.Status().Message, tt.message)
-		})
-	}
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "httproute update failed")
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_HTTPRouteGetError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	gwClient.PrependReactor("get", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("get httproute failed"))
+	})
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  fake.NewClientset(),
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+		}).
+		WithGatewaySystemType(GatewayApiDefault).
+		Build()
+	require.NoError(t, err)
+
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "get httproute failed")
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_HTTPRouteCacheSetError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, _ := newGatewayAPIOnlyKubeClient(t)
+
+	route := dualModeTestRoute()
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	kubeClient.Cache = newTinyRouteCache(t, cache.HttpRouteCache)
+	route.Spec.Port.TargetPort = 7070
+
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "failed to place HTTPRoute into cache")
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_PlacesHTTPRouteInCache(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, _ := newGatewayAPIOnlyKubeClient(t)
+	kubeClient.Cache = cache.NewTestResourcesCache(cache.HttpRouteCache)
+
+	route := dualModeTestRoute()
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	route.Spec.Port.TargetPort = 7070
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	cached := kubeClient.Cache.HTTPRoute.Get(ctx, testNamespace1, testIngress)
+	assertions.NotNil(cached)
+}
+
+func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteNotFound_NoError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, _ := newGatewayAPIOnlyKubeClient(t)
+
+	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+}
+
+func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteDeleteError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  fake.NewClientset(),
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+		}).
+		WithGatewaySystemType(GatewayApiDefault).
+		Build()
+	require.NoError(t, err)
+
+	_, err = kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	require.NoError(t, err)
+
+	gwClient.PrependReactor("delete", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("httproute delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "httproute delete failed")
+}
+
+func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressNotFound_NoError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClientSet := fake.NewClientset()
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
+		KubernetesInterface:  kubeClientSet,
+		CertmanagerInterface: &certClient.Clientset{},
+	})
+	kubeClient.UseNetworkingV1Ingress = true
+	kubeClient.GatewaySystem.Type = LegacyIngress
+
+	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+}
+
+func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressDeleteError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClientSet := fake.NewClientset()
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
+		KubernetesInterface:  kubeClientSet,
+		CertmanagerInterface: &certClient.Clientset{},
+	})
+	kubeClient.UseNetworkingV1Ingress = true
+	kubeClient.GatewaySystem.Type = LegacyIngress
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	require.NoError(t, err)
+
+	kubeClientSet.PrependReactor("delete", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "ingress delete failed")
+}
+
+func Test_DeleteRoute_LegacyIngress_V1beta1_IngressNotFound_NoError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClientSet := fake.NewClientset()
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
+		KubernetesInterface:  kubeClientSet,
+		CertmanagerInterface: &certClient.Clientset{},
+	})
+	kubeClient.GatewaySystem.Type = LegacyIngress
+
+	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+}
+
+func Test_DeleteRoute_LegacyIngress_V1beta1_IngressDeleteError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClientSet := fake.NewClientset()
+	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{
+		KubernetesInterface:  kubeClientSet,
+		CertmanagerInterface: &certClient.Clientset{},
+	})
+	kubeClient.GatewaySystem.Type = LegacyIngress
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	require.NoError(t, err)
+
+	kubeClientSet.PrependReactor("delete", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("extensions ingress delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "extensions ingress delete failed")
+}
+
+func Test_UpdateOrCreateRoute_DualMode_SetsIgnoreAnnotationOnIngressUpdate(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, _ := newDualModeKubeClient(t)
+
+	route := dualModeTestRoute()
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	route.Spec.Port.TargetPort = 6060
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	ingress, err := k8sClient.NetworkingV1().Ingresses(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.NoError(err)
+	assertions.Equal("true", ingress.Annotations[IgnoreApiConverterAnnotation])
 }
