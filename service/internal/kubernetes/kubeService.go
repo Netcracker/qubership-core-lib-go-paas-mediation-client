@@ -251,13 +251,16 @@ func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers 
 	authClient := b.client.KubernetesInterface
 
 	if hasKindGatewayApi("HTTPRoute", kubeDiscovery) {
-		b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", handlers.WithHTTPRouteV1)
+		if err := b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", handlers.WithHTTPRouteV1); err != nil {
+			return err
+		}
 	}
 
 	if hasKindGatewayApi("GRPCRoute", kubeDiscovery) {
-		b.registerGatewayRouteWatchHandler(authClient, "GRPCRoute", "grpcroutes", handlers.WithGRPCRouteV1)
+		if err := b.registerGatewayRouteWatchHandler(authClient, "GRPCRoute", "grpcroutes", handlers.WithGRPCRouteV1); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -265,23 +268,23 @@ func (b *KubernetesClientBuilder) registerGatewayRouteWatchHandler(
 	authClient kubernetes.Interface,
 	kind, resource string,
 	register func(executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface),
-) {
+) error {
 	allowed, checked := canWatchGatewayResource(authClient, b.namespace, resource)
 	if checked && !allowed {
 		logger.Warn("%s API is available but ServiceAccount cannot watch %s in namespace '%s'; %s cache watch is disabled",
 			kind, resource, b.namespace, kind)
-		return
+		return nil
 	}
 	restClient := gatewayRESTClient(b.client)
 	if restClient == nil {
 		logger.Warn("%s cache is enabled but Gateway API REST client is not available; %s watch is disabled", kind, kind)
-		return
+		return nil
 	}
 	if err := gatewayv1.Install(scheme.Scheme); err != nil {
-		logger.Errorf("failed to install Gateway API scheme for %s watch: %v", kind, err)
-		return
+		return err
 	}
 	register(b.watchExecutor, b.watchClientTimeout, restClient)
+	return nil
 }
 
 func gatewayRESTClient(client *backend.KubernetesApi) rest.Interface {
