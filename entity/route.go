@@ -382,8 +382,8 @@ func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
 	return &gatewayv1.HTTPRouteTimeouts{Request: &timeout}
 }
 
-func RouteFromHTTPRouteGatewayV1(httpRoute *gatewayv1.HTTPRoute) *Route {
-	logger.Debugf("Processing RouteFromHTTPRouteGatewayV1, httpRoute: %s", httpRoute.Name)
+func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
+	logger.Debugf("Processing RouteFromHTTPRoute, httpRoute: %s", httpRoute.Name)
 
 	var routeSpec RouteSpec
 	if len(httpRoute.Spec.Rules) > 0 &&

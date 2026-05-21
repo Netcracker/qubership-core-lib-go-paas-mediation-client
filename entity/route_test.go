@@ -534,7 +534,7 @@ func TestRouteBackendPort(t *testing.T) {
 	assert.Equal(t, int32(9090), int32(routeBackendPort(9090)))
 }
 
-func TestRouteFromHTTPRouteGatewayV1(t *testing.T) {
+func TestRouteFromHTTPRoute(t *testing.T) {
 	pathType := "PathPrefix"
 	pathValue := "/test-path"
 	port := int32(8080)
@@ -572,7 +572,7 @@ func TestRouteFromHTTPRouteGatewayV1(t *testing.T) {
 		},
 	}
 
-	route := RouteFromHTTPRouteGatewayV1(httpRoute)
+	route := RouteFromHTTPRoute(httpRoute)
 
 	assert.Equal(t, testName, route.Metadata.Name)
 	assert.Equal(t, testNamespace, route.Metadata.Namespace)
@@ -583,7 +583,7 @@ func TestRouteFromHTTPRouteGatewayV1(t *testing.T) {
 	assert.Equal(t, port, route.Spec.Port.TargetPort)
 }
 
-func TestRouteFromHTTPRouteGatewayV1_EmptyRules(t *testing.T) {
+func TestRouteFromHTTPRoute_EmptyRules(t *testing.T) {
 	httpRoute := &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testName,
@@ -592,7 +592,7 @@ func TestRouteFromHTTPRouteGatewayV1_EmptyRules(t *testing.T) {
 		Spec: gatewayv1.HTTPRouteSpec{},
 	}
 
-	route := RouteFromHTTPRouteGatewayV1(httpRoute)
+	route := RouteFromHTTPRoute(httpRoute)
 
 	assert.Equal(t, testName, route.Metadata.Name)
 	assert.Equal(t, "", route.Spec.Host)

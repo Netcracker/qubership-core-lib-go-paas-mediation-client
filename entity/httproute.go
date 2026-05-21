@@ -12,6 +12,6 @@ func (r HttpRoute) GetMetadata() Metadata {
 	return *FromObjectMeta(r.Kind, &r.ObjectMeta)
 }
 
-func RouteFromHTTPRoute(httpRoute *v1.HTTPRoute) *HttpRoute {
+func WrapHTTPRoute(httpRoute *v1.HTTPRoute) *HttpRoute {
 	return &HttpRoute{httpRoute}
 }

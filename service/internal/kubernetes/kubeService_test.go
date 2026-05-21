@@ -517,7 +517,7 @@ func Test_GetHttpRouteList_success(t *testing.T) {
 	list, err := kube.GetHttpRouteList(context.Background(), ns, filter.Meta{})
 	r.NoError(err)
 	r.Equal(2, len(list))
-	r.Equal(*entity.RouteFromHTTPRoute(hr1), list[0])
+	r.Equal(*entity.WrapHTTPRoute(hr1), list[0])
 }
 
 func Test_GetGrpcRouteList_success(t *testing.T) {

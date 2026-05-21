@@ -36,7 +36,7 @@ func TestHttpRoute_GetMetadata(t *testing.T) {
 	assert.Equal(t, "test route", metadata.Annotations["description"])
 }
 
-func TestRouteFromHTTPRoute(t *testing.T) {
+func TestWrapHTTPRoute(t *testing.T) {
 	httpRoute := &v1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-http-route",
@@ -44,7 +44,7 @@ func TestRouteFromHTTPRoute(t *testing.T) {
 		},
 	}
 
-	result := RouteFromHTTPRoute(httpRoute)
+	result := WrapHTTPRoute(httpRoute)
 
 	assert.NotNil(t, result)
 	assert.Equal(t, httpRoute, result.HTTPRoute)
@@ -52,8 +52,8 @@ func TestRouteFromHTTPRoute(t *testing.T) {
 	assert.Equal(t, "test-namespace", result.Namespace)
 }
 
-func TestRouteFromHTTPRoute_NilInput(t *testing.T) {
-	result := RouteFromHTTPRoute(nil)
+func TestWrapHTTPRoute_NilInput(t *testing.T) {
+	result := WrapHTTPRoute(nil)
 
 	assert.NotNil(t, result)
 	assert.Nil(t, result.HTTPRoute)

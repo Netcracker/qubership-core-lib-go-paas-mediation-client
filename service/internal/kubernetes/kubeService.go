@@ -136,12 +136,7 @@ type KubernetesClientBuilder struct {
 }
 
 func NewKubernetesClientBuilder() *KubernetesClientBuilder {
-	return &KubernetesClientBuilder{
-		gatewaySystem: GatewaySystem{
-			Namespace: DefaultGatewaySystemNamespace,
-			Name:      DefaultGatewaySystemName,
-		},
-	}
+	return &KubernetesClientBuilder{}
 }
 
 func (b *KubernetesClientBuilder) WithNamespace(namespace string) *KubernetesClientBuilder {
@@ -214,6 +209,13 @@ func (b *KubernetesClientBuilder) applyDefaults() {
 	}
 	if b.cache == nil {
 		b.cache = &cache.ResourcesCache{} // set empty cache
+	}
+
+	if b.gatewaySystem.Namespace == "" {
+		b.gatewaySystem.Namespace = DefaultGatewaySystemNamespace
+	}
+	if b.gatewaySystem.Name == "" {
+		b.gatewaySystem.Name = DefaultGatewaySystemName
 	}
 }
 

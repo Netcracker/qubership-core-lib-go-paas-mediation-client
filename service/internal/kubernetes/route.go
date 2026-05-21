@@ -125,9 +125,9 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 			}
 			logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
 
-			routeFromHTTPRoute := entity.RouteFromHTTPRouteGatewayV1(updatedHTTPRoute)
+			routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
 			if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
-				httpRouteEntity := entity.RouteFromHTTPRoute(updatedHTTPRoute)
+				httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
 				_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
 				if err != nil {
 					return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)
@@ -308,7 +308,7 @@ func (kube *Kubernetes) GetHttpRouteList(ctx context.Context, namespace string, 
 	return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, kube.Cache.HTTPRoute,
 		func(listObj *gatewayv1.HTTPRouteList) (result []entity.HttpRoute) {
 			for _, item := range listObj.Items {
-				route := entity.RouteFromHTTPRoute(&item)
+				route := entity.WrapHTTPRoute(&item)
 				if route != nil {
 					result = append(result, *route)
 				}
@@ -445,9 +445,9 @@ func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route
 		return nil, err
 	}
 
-	routeFromHTTPRoute := entity.RouteFromHTTPRouteGatewayV1(createdHTTPRoute)
+	routeFromHTTPRoute := entity.RouteFromHTTPRoute(createdHTTPRoute)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
-		httpRouteEntity := entity.RouteFromHTTPRoute(createdHTTPRoute)
+		httpRouteEntity := entity.WrapHTTPRoute(createdHTTPRoute)
 		_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
 		if err != nil {
 			return nil, fmt.Errorf("failed to place HTTPRoute into cache: %w", err)

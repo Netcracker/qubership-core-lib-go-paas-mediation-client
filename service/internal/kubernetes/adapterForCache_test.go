@@ -99,7 +99,7 @@ func TestCacheAdapters(t *testing.T) {
 			resourceDeleted := createHttpRoute(testResourceName, 2, "3")
 			resourceCache := resourcesCache.HTTPRoute
 			assertions.NotNil(resourceCache)
-			testCacheAdapter(ctx, t, testResourceName, resourceAdded, resourceModified, resourceDeleted, entity.RouteFromHTTPRoute, resourceCache, watchExecutor1)
+			testCacheAdapter(ctx, t, testResourceName, resourceAdded, resourceModified, resourceDeleted, entity.WrapHTTPRoute, resourceCache, watchExecutor1)
 		case cache.GrpcRouteCache:
 			resourceAdded := createGrpcRoute(testResourceName, 1, "1")
 			resourceModified := createGrpcRoute(testResourceName, 2, "2")

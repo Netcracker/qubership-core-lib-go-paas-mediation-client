@@ -140,7 +140,7 @@ func NewSharedWatchEventHandlers(executor pmWatch.Executor,
 func (h *SharedWatchHandlers) WithHTTPRouteV1(executor pmWatch.Executor, clientTimeout time.Duration, gatewayV1 rest.Interface) {
 	h.HTTPRouteV1 = NewSharedWatchEventHandler(types.HTTPRoutes, clientTimeout, func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
 		return newSharedNamespaceWatchHandler(namespace, kind, clientTimeout, func(namespace string, kind types.PaasResourceType) *RestWatchEventHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
-			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.RouteFromHTTPRoute)
+			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.WrapHTTPRoute)
 		})
 	})
 }

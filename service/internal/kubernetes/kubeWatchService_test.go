@@ -224,7 +224,7 @@ func TestWatchGatewayHTTPRoutesAddedEvent(t *testing.T) {
 		for watchEvent := range watchHandler.Channel {
 			logger.Info("Get event %s", watchEvent.Type)
 			r.Equal("ADDED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(route)
+			expected := entity.WrapHTTPRoute(route)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
@@ -312,7 +312,7 @@ func TestWatchGatewayHTTPRoutesDeletedEvent(t *testing.T) {
 		for watchEvent := range watchHandler.Channel {
 			logger.Info("Get event %s", watchEvent.Type)
 			r.Equal("DELETED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(route)
+			expected := entity.WrapHTTPRoute(route)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
