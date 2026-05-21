@@ -63,8 +63,9 @@ func TestCacheItemIgnoredDueToMaxItemSize(t *testing.T) {
 	assertions.NoError(err)
 
 	ok, err := cache.ConfigMaps.Set(ctx, configMap1)
-	assertions.NoError(err)
+	assertions.Error(err)
 	assertions.False(ok)
+	assertions.Contains(err.Error(), "failed to place")
 
 	configMapFromCache1 := cache.ConfigMaps.Get(ctx, configMap1.Namespace, configMap1.Name)
 	assertions.Nil(configMapFromCache1)
