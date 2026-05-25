@@ -37,6 +37,10 @@ const (
 	ConfigSnippetWarning        = "requires manual conversion using RequestHeaderModifier/ResponseHeaderModifier filters"
 )
 
+const (
+	partialRouteCreateMsg = "HTTPRoute route was created, Ingress route was not created - try using Update endpoint"
+)
+
 func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	if !kube.GatewaySystem.IsRouteCreationAllowed() {
 		return nil, kube.GatewaySystem.RouteCreationNotAllowedError()
@@ -45,36 +49,46 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 	useGatewayAPI := kube.GatewaySystem.IsGatewayAPIEnabled()
 	useLegacyIngress := kube.GatewaySystem.IsIngressEnabled()
 
-	var result *entity.Route
-	var err error
+	var httpRouteResult *entity.Route
 
 	if useGatewayAPI {
-		result, err = kube.createHTTPRoute(ctx, route, namespace)
+		var err error
+		httpRouteResult, err = kube.createHTTPRoute(ctx, route, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
 		}
 		logger.InfoC(ctx, "HTTPRoute created: %s", route.Name)
 	}
 
-	if !useLegacyIngress {
-		return result, nil
+	if useLegacyIngress {
+		ingressResult, ingressErr := kube.createRouteLegacyIngress(ctx, route, namespace)
+		if ingressErr != nil {
+			if useGatewayAPI {
+				return nil, paasErrors.NewInternalError(fmt.Errorf(partialRouteCreateMsg))
+			}
+			return nil, ingressErr
+		}
+		logger.InfoC(ctx, "Ingress created: %s", route.Name)
+		return ingressResult, nil
 	}
 
+	return httpRouteResult, nil
+}
+
+func (kube *Kubernetes) createRouteLegacyIngress(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	if kube.UseNetworkingV1Ingress {
 		ingress := route.ToIngressNetworkingV1()
 		kube.configureIngress(ingress)
 
-		createdIngress, e := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
-		if e != nil {
-			logger.ErrorC(ctx, "Error to create ingress: %+v", e)
-			return nil, e
+		createdIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
+		if err != nil {
+			logger.ErrorC(ctx, "Error to create ingress: %+v", err)
+			return nil, err
 		}
-		logger.InfoC(ctx, "Ingress created: %s", route.Name)
 		ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(createdIngress)
 		if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
-			_, e := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
-			if e != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", e)
+			if _, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1); err != nil {
+				return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
 			}
 		}
 		return ingressNetworkingV1, nil
@@ -82,17 +96,15 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 		ingress := route.ToIngress()
 		kube.configureIngress(ingress)
 
-		createdIngress, e := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
-		if e != nil {
-			logger.ErrorC(ctx, "Error to create ingress: %+v", e)
-			return nil, e
+		createdIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
+		if err != nil {
+			logger.ErrorC(ctx, "Error to create ingress: %+v", err)
+			return nil, err
 		}
-		logger.InfoC(ctx, "Ingress created: %s", route.Name)
 		routeFromIngress := entity.RouteFromIngress(createdIngress)
 		if kube.Cache.Ingresses != nil && routeFromIngress != nil {
-			_, e := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
-			if e != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", e)
+			if _, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress); err != nil {
+				return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
 			}
 		}
 		return routeFromIngress, nil
