@@ -900,7 +900,7 @@ func Test_CreateRoute_NetworkingV1_IngressCacheSetError(t *testing.T) {
 
 	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
 	assertions.Error(err)
-	assertions.Contains(err.Error(), "faield to place ingress into cache")
+	assertions.Contains(err.Error(), "failed to place ingress into cache")
 
 	ingressList, err := kubeClientSet.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
 	assertions.NoError(err)
@@ -920,7 +920,7 @@ func Test_CreateRoute_V1beta1_IngressCacheSetError(t *testing.T) {
 
 	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
 	assertions.Error(err)
-	assertions.Contains(err.Error(), "faield to place ingress into cache")
+	assertions.Contains(err.Error(), "failed to place ingress into cache")
 
 	ingressList, err := kubeClientSet.ExtensionsV1beta1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
 	assertions.NoError(err)

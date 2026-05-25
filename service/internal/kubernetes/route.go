@@ -19,6 +19,7 @@ import (
 var BG2IngressClassName = "bg.mesh.netcracker.com"
 
 const IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
+const errPlaceIngressIntoCache = "failed to place ingress into cache: %w"
 
 const (
 	AnnotationBackendProtocol   = "nginx.ingress.kubernetes.io/backend-protocol"
@@ -77,38 +78,51 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 
 func (kube *Kubernetes) createRouteLegacyIngress(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
 	if kube.UseNetworkingV1Ingress {
-		ingress := route.ToIngressNetworkingV1()
-		kube.configureIngress(ingress)
-
-		createdIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
-		if err != nil {
-			logger.ErrorC(ctx, "Error to create ingress: %+v", err)
-			return nil, err
-		}
-		ingressNetworkingV1 := entity.RouteFromIngressNetworkingV1(createdIngress)
-		if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
-			if _, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1); err != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
-			}
-		}
-		return ingressNetworkingV1, nil
-	} else {
-		ingress := route.ToIngress()
-		kube.configureIngress(ingress)
-
-		createdIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
-		if err != nil {
-			logger.ErrorC(ctx, "Error to create ingress: %+v", err)
-			return nil, err
-		}
-		routeFromIngress := entity.RouteFromIngress(createdIngress)
-		if kube.Cache.Ingresses != nil && routeFromIngress != nil {
-			if _, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress); err != nil {
-				return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
-			}
-		}
-		return routeFromIngress, nil
+		return kube.createNetworkingV1IngressRoute(ctx, route, namespace)
 	}
+	return kube.createExtensionsV1IngressRoute(ctx, route, namespace)
+}
+
+func (kube *Kubernetes) cacheIngressRoute(ctx context.Context, route *entity.Route) error {
+	if kube.Cache.Ingresses == nil || route == nil {
+		return nil
+	}
+	if _, err := kube.Cache.Ingresses.Set(ctx, *route); err != nil {
+		return fmt.Errorf(errPlaceIngressIntoCache, err)
+	}
+	return nil
+}
+
+func (kube *Kubernetes) createNetworkingV1IngressRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
+	ingress := route.ToIngressNetworkingV1()
+	kube.configureIngress(ingress)
+
+	createdIngress, err := kube.getNetworkingV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
+	if err != nil {
+		logger.ErrorC(ctx, "Error to create ingress: %+v", err)
+		return nil, err
+	}
+	ingressRoute := entity.RouteFromIngressNetworkingV1(createdIngress)
+	if err := kube.cacheIngressRoute(ctx, ingressRoute); err != nil {
+		return nil, err
+	}
+	return ingressRoute, nil
+}
+
+func (kube *Kubernetes) createExtensionsV1IngressRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
+	ingress := route.ToIngress()
+	kube.configureIngress(ingress)
+
+	createdIngress, err := kube.getExtensionsV1Client().Ingresses(namespace).Create(ctx, ingress, v1.CreateOptions{})
+	if err != nil {
+		logger.ErrorC(ctx, "Error to create ingress: %+v", err)
+		return nil, err
+	}
+	ingressRoute := entity.RouteFromIngress(createdIngress)
+	if err := kube.cacheIngressRoute(ctx, ingressRoute); err != nil {
+		return nil, err
+	}
+	return ingressRoute, nil
 }
 
 func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
@@ -186,7 +200,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 			if kube.Cache.Ingresses != nil && ingressNetworkingV1 != nil {
 				_, err := kube.Cache.Ingresses.Set(ctx, *ingressNetworkingV1)
 				if err != nil {
-					return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
+					return nil, fmt.Errorf(errPlaceIngressIntoCache, err)
 				}
 			}
 			if result == nil {
@@ -218,7 +232,7 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 			if kube.Cache.Ingresses != nil && routeFromIngress != nil {
 				_, err := kube.Cache.Ingresses.Set(ctx, *routeFromIngress)
 				if err != nil {
-					return nil, fmt.Errorf("faield to place ingress into cache: %w", err)
+					return nil, fmt.Errorf(errPlaceIngressIntoCache, err)
 				}
 			}
 			if result == nil {
