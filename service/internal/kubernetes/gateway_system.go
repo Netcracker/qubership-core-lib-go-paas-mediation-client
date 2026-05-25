@@ -23,14 +23,14 @@ type GatewaySystem struct {
 	Name      string
 }
 
-func (g GatewaySystem) ShouldUseGatewayAPI() bool {
+func (g GatewaySystem) IsGatewayAPIEnabled() bool {
 	if g.Type == "" {
 		return false
 	}
 	return strings.Contains(g.Type, GatewayApiDefault)
 }
 
-func (g GatewaySystem) ShouldCreateLegacyIngress() bool {
+func (g GatewaySystem) IsIngressEnabled() bool {
 	if g.Type == "" {
 		return true
 	}
@@ -45,7 +45,7 @@ func (g GatewaySystem) IsBothGatewaySystemsEnabled() bool {
 }
 
 func (g GatewaySystem) IsRouteCreationAllowed() bool {
-	return g.ShouldUseGatewayAPI() || g.ShouldCreateLegacyIngress()
+	return g.IsGatewayAPIEnabled() || g.IsIngressEnabled()
 }
 
 func (g GatewaySystem) RouteCreationNotAllowedError() error {

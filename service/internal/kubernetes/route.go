@@ -42,8 +42,8 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 		return nil, kube.GatewaySystem.RouteCreationNotAllowedError()
 	}
 
-	useGatewayAPI := kube.GatewaySystem.ShouldUseGatewayAPI()
-	useLegacyIngress := kube.GatewaySystem.ShouldCreateLegacyIngress()
+	useGatewayAPI := kube.GatewaySystem.IsGatewayAPIEnabled()
+	useLegacyIngress := kube.GatewaySystem.IsIngressEnabled()
 
 	var result *entity.Route
 	var err error
@@ -104,8 +104,8 @@ func (kube *Kubernetes) UpdateOrCreateRoute(ctx context.Context, route *entity.R
 		return nil, kube.GatewaySystem.RouteUpdateNotAllowedError()
 	}
 
-	useGatewayAPI := kube.GatewaySystem.ShouldUseGatewayAPI()
-	useLegacyIngress := kube.GatewaySystem.ShouldCreateLegacyIngress()
+	useGatewayAPI := kube.GatewaySystem.IsGatewayAPIEnabled()
+	useLegacyIngress := kube.GatewaySystem.IsIngressEnabled()
 
 	var result *entity.Route
 	var httpRouteExists bool
@@ -233,38 +233,42 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 	}
 }
 
-func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName string, namespace string) error {
-	var firstErr error
+func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName, namespace string) error {
+	var (
+		httpRouteErr       error
+		httpRouteAttempted bool
+	)
 
-	if kube.GatewaySystem.ShouldUseGatewayAPI() {
-		if err := kube.deleteRouteHTTPRoute(ctx, routeName, namespace); err != nil {
-			firstErr = err
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		httpRouteAttempted = true
+		httpRouteErr = kube.deleteRouteHTTPRoute(ctx, routeName, namespace)
+		if httpRouteErr != nil && !paasErrors.IsNotFound(httpRouteErr) {
+			return httpRouteErr
 		}
 	}
 
-	if kube.GatewaySystem.ShouldCreateLegacyIngress() {
-		if err := kube.deleteRouteLegacyIngress(ctx, routeName, namespace); err != nil && firstErr == nil {
-			firstErr = err
+	if kube.GatewaySystem.IsIngressEnabled() {
+		ingressErr := kube.deleteRouteLegacyIngress(ctx, routeName, namespace)
+		if ingressErr != nil && paasErrors.IsNotFound(ingressErr) && httpRouteAttempted && httpRouteErr == nil {
+			return nil
 		}
+		return ingressErr
 	}
 
-	return firstErr
+	return httpRouteErr
 }
 
 func (kube *Kubernetes) deleteRouteHTTPRoute(ctx context.Context, routeName, namespace string) error {
 	err := kube.getGatewayV1Client().HTTPRoutes(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
-	if err == nil {
-		logger.InfoC(ctx, "HTTPRoute deleted: %s", routeName)
-		if kube.Cache.HTTPRoute != nil {
-			kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
-		}
-		return nil
+	if err != nil {
+		logger.ErrorC(ctx, "Error while deleting HTTPRoute=%s from kubernetes: %+v", routeName, err)
+		return err
 	}
-	if paasErrors.IsNotFound(err) {
-		return nil
+	logger.InfoC(ctx, "HTTPRoute deleted: %s", routeName)
+	if kube.Cache.HTTPRoute != nil {
+		kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
 	}
-	logger.ErrorC(ctx, "Error while deleting HTTPRoute=%s from kubernetes: %+v", routeName, err)
-	return err
+	return nil
 }
 
 func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName, namespace string) error {
@@ -274,18 +278,15 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 	} else {
 		err = kube.getExtensionsV1Client().Ingresses(namespace).Delete(ctx, routeName, v1.DeleteOptions{})
 	}
-	if err == nil {
-		logger.InfoC(ctx, "Ingress deleted: %s", routeName)
-		if kube.Cache.Ingresses != nil {
-			kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
-		}
-		return nil
+	if err != nil {
+		logger.ErrorC(ctx, "Error while deleting ingress=%s from kubernetes: %+v", routeName, err)
+		return err
 	}
-	if paasErrors.IsNotFound(err) {
-		return nil
+	logger.InfoC(ctx, "Ingress deleted: %s", routeName)
+	if kube.Cache.Ingresses != nil {
+		kube.Cache.Ingresses.Delete(ctx, namespace, routeName)
 	}
-	logger.ErrorC(ctx, "Error while deleting ingress=%s from kubernetes: %+v", routeName, err)
-	return err
+	return nil
 }
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {

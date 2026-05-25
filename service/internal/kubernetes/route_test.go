@@ -553,6 +553,24 @@ func Test_UpdateOrCreateRoute_DualMode_UpdatesBoth(t *testing.T) {
 	assertions.Equal(int32(9090), ingress.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number)
 }
 
+func Test_DeleteRoute_DualMode_HTTPRouteDeleted_IngressNotFound_NoError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+
+	err = k8sClient.NetworkingV1().Ingresses(testNamespace1).Delete(ctx, testIngress, metav1.DeleteOptions{})
+	assertions.NoError(err)
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+
+	_, err = gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.True(paasErrors.IsNotFound(err))
+}
+
 func Test_DeleteRoute_DualMode_DeletesBoth(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
@@ -968,13 +986,13 @@ func Test_UpdateOrCreateRoute_GatewayAPIOnly_PlacesHTTPRouteInCache(t *testing.T
 	assertions.NotNil(cached)
 }
 
-func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteNotFound_NoError(t *testing.T) {
+func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteNotFound_ReturnsNotFound(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	kubeClient, _ := newGatewayAPIOnlyKubeClient(t)
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
-	assertions.NoError(err)
+	assertions.True(paasErrors.IsNotFound(err))
 }
 
 func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteDeleteError(t *testing.T) {
@@ -1004,7 +1022,7 @@ func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteDeleteError(t *testing.T) {
 	assertions.Contains(err.Error(), "httproute delete failed")
 }
 
-func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressNotFound_NoError(t *testing.T) {
+func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressNotFound_ReturnsNotFound(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	kubeClientSet := fake.NewClientset()
@@ -1016,7 +1034,7 @@ func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressNotFound_NoError(t *test
 	kubeClient.GatewaySystem.Type = LegacyIngress
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
-	assertions.NoError(err)
+	assertions.True(paasErrors.IsNotFound(err))
 }
 
 func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressDeleteError(t *testing.T) {
@@ -1042,7 +1060,7 @@ func Test_DeleteRoute_LegacyIngress_NetworkingV1_IngressDeleteError(t *testing.T
 	assertions.Contains(err.Error(), "ingress delete failed")
 }
 
-func Test_DeleteRoute_LegacyIngress_V1beta1_IngressNotFound_NoError(t *testing.T) {
+func Test_DeleteRoute_LegacyIngress_V1beta1_IngressNotFound_ReturnsNotFound(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	kubeClientSet := fake.NewClientset()
@@ -1053,7 +1071,7 @@ func Test_DeleteRoute_LegacyIngress_V1beta1_IngressNotFound_NoError(t *testing.T
 	kubeClient.GatewaySystem.Type = LegacyIngress
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
-	assertions.NoError(err)
+	assertions.True(paasErrors.IsNotFound(err))
 }
 
 func Test_DeleteRoute_LegacyIngress_V1beta1_IngressDeleteError(t *testing.T) {
