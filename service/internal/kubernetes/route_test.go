@@ -522,7 +522,9 @@ func Test_CreateRoute_DualMode_HTTPRouteCreated_IngressFailed_ReturnsPartialCrea
 	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
 	assertions.Error(err)
 	assertions.True(paasErrors.IsInternalError(err))
-	assertions.Contains(err.Error(), "HTTPRoute route was created, Ingress route was not created - try using Update endpoint")
+	assertions.Contains(err.Error(), "httproute: created")
+	assertions.Contains(err.Error(), "ingress: error:")
+	assertions.Contains(err.Error(), "try using Update endpoint")
 
 	httpRouteList, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).List(ctx, metav1.ListOptions{})
 	assertions.NoError(err)
@@ -533,7 +535,40 @@ func Test_CreateRoute_DualMode_HTTPRouteCreated_IngressFailed_ReturnsPartialCrea
 	assertions.Empty(ingressList.Items)
 }
 
-func Test_CreateRoute_DualMode_HTTPRouteFailed_IngressNotCreated(t *testing.T) {
+func Test_CreateRoute_DualMode_BothFailed_ReturnsFullStatusError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	gwClient.PrependReactor("create", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("httproute create failed"))
+	})
+	kubeClientSet := fake.NewClientset()
+	kubeClientSet.PrependReactor("create", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress create failed"))
+	})
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  kubeClientSet,
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+		}).
+		WithGatewaySystemType(LegacyIngress + "," + GatewayApiDefault).
+		Build()
+	require.NoError(t, err)
+	kubeClient.UseNetworkingV1Ingress = true
+
+	_, err = kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: error:")
+	assertions.Contains(err.Error(), "httproute create failed")
+	assertions.Contains(err.Error(), "ingress: error:")
+	assertions.Contains(err.Error(), "ingress create failed")
+	assertions.NotContains(err.Error(), "try using Update endpoint")
+}
+
+func Test_CreateRoute_DualMode_HTTPRouteFailed_IngressCreated_ReturnsPartialCreateError(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 	gwClient := gatewayclientfake.NewSimpleClientset()
@@ -555,12 +590,14 @@ func Test_CreateRoute_DualMode_HTTPRouteFailed_IngressNotCreated(t *testing.T) {
 
 	_, err = kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
 	assertions.Error(err)
-	assertions.Contains(err.Error(), "failed to create HTTPRoute")
-	assertions.NotContains(err.Error(), "try using Update endpoint")
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: error:")
+	assertions.Contains(err.Error(), "ingress: created")
+	assertions.Contains(err.Error(), "try using Update endpoint")
 
 	ingressList, err := kubeClientSet.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
 	assertions.NoError(err)
-	assertions.Empty(ingressList.Items)
+	assertions.Len(ingressList.Items, 1)
 }
 
 func Test_CreateRoute_DualMode_CreatesHTTPRouteAndIngress(t *testing.T) {
@@ -581,6 +618,86 @@ func Test_CreateRoute_DualMode_CreatesHTTPRouteAndIngress(t *testing.T) {
 	assertions.NoError(err)
 	assertions.Len(ingressList.Items, 1)
 	assertions.Equal("true", ingressList.Items[0].Annotations[IgnoreApiConverterAnnotation])
+}
+
+func Test_UpdateOrCreateRoute_DualMode_AfterPartialCreate_CreatesMissingIngress(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	var ingressCreateAttempts int
+	k8sClient.PrependReactor("create", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		ingressCreateAttempts++
+		if ingressCreateAttempts == 1 {
+			return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress create failed"))
+		}
+		return false, nil, nil
+	})
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.Error(err)
+	assertions.Contains(err.Error(), "httproute: created")
+	assertions.Contains(err.Error(), "ingress: error:")
+
+	httpRouteList, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Len(httpRouteList.Items, 1)
+
+	updated, err := kubeClient.UpdateOrCreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+	assertions.NotNil(updated)
+
+	ingressList, err := k8sClient.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Len(ingressList.Items, 1)
+}
+
+func Test_UpdateOrCreateRoute_DualMode_HTTPRouteExists_CreatesMissingIngress(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	route := dualModeTestRoute()
+	httpRoute := route.ToHTTPRoute(kubeClient.GatewaySystem.Namespace, kubeClient.GatewaySystem.Name)
+	_, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).Create(ctx, httpRoute, metav1.CreateOptions{})
+	assertions.NoError(err)
+
+	updated, err := kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+	assertions.NotNil(updated)
+
+	ingressList, err := k8sClient.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Len(ingressList.Items, 1)
+	assertions.Equal("true", ingressList.Items[0].Annotations[IgnoreApiConverterAnnotation])
+}
+
+func Test_UpdateOrCreateRoute_DualMode_HTTPRouteUpdated_IngressUpdateError_ReturnsFullStatusError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+
+	k8sClient.PrependReactor("update", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress update failed"))
+	})
+
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: updated")
+	assertions.Contains(err.Error(), "ingress: error:")
+	assertions.Contains(err.Error(), "ingress update failed")
+	assertions.Contains(err.Error(), "try using Update endpoint")
+
+	httpRouteList, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Len(httpRouteList.Items, 1)
+
+	ingressList, err := k8sClient.NetworkingV1().Ingresses(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Len(ingressList.Items, 1)
 }
 
 func Test_UpdateOrCreateRoute_DualMode_UpdatesBoth(t *testing.T) {
@@ -622,6 +739,87 @@ func Test_DeleteRoute_DualMode_HTTPRouteDeleted_IngressNotFound_NoError(t *testi
 
 	_, err = gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
 	assertions.True(paasErrors.IsNotFound(err))
+}
+
+func Test_DeleteRoute_DualMode_HTTPRouteDeleted_IngressDeleteError_ReturnsFullStatusError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+
+	k8sClient.PrependReactor("delete", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: deleted")
+	assertions.Contains(err.Error(), "ingress: error:")
+	assertions.Contains(err.Error(), "ingress delete failed")
+
+	_, err = gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.True(paasErrors.IsNotFound(err))
+}
+
+func Test_DeleteRoute_DualMode_HTTPRouteDeleteError_IngressDeleted_ReturnsFullStatusError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+
+	gwClient.PrependReactor("delete", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("httproute delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: error:")
+	assertions.Contains(err.Error(), "httproute delete failed")
+	assertions.Contains(err.Error(), "ingress: deleted")
+
+	_, err = k8sClient.NetworkingV1().Ingresses(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.True(paasErrors.IsNotFound(err))
+}
+
+func Test_DeleteRoute_DualMode_BothDeleteFailed_ReturnsFullStatusError(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, k8sClient, gwClient := newDualModeKubeClient(t)
+
+	_, err := kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
+	assertions.NoError(err)
+
+	gwClient.PrependReactor("delete", "httproutes", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("httproute delete failed"))
+	})
+	k8sClient.PrependReactor("delete", "ingresses", func(action kube_test.Action) (bool, runtime.Object, error) {
+		return true, nil, paasErrors.NewInternalError(fmt.Errorf("ingress delete failed"))
+	})
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInternalError(err))
+	assertions.Contains(err.Error(), "httproute: error:")
+	assertions.Contains(err.Error(), "httproute delete failed")
+	assertions.Contains(err.Error(), "ingress: error:")
+	assertions.Contains(err.Error(), "ingress delete failed")
+}
+
+func Test_DeleteRoute_DualMode_BothNotFound_ReturnsNotFound(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, _, _ := newDualModeKubeClient(t)
+
+	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.True(paasErrors.IsNotFound(err))
+	assertions.Contains(err.Error(), "httproute: not found")
+	assertions.Contains(err.Error(), "ingress: not found")
 }
 
 func Test_DeleteRoute_DualMode_DeletesBoth(t *testing.T) {
@@ -846,7 +1044,8 @@ func Test_CreateRoute_GatewayAPIOnly_HTTPRouteCreateError(t *testing.T) {
 
 	_, err = kubeClient.CreateRoute(ctx, dualModeTestRoute(), testNamespace1)
 	assertions.Error(err)
-	assertions.Contains(err.Error(), "failed to create HTTPRoute")
+	assertions.Contains(err.Error(), "httproute: error:")
+	assertions.Contains(err.Error(), "httproute create failed")
 }
 
 func Test_CreateRoute_NetworkingV1_IngressCreateError(t *testing.T) {
