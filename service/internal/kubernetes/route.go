@@ -20,6 +20,8 @@ var BG2IngressClassName = "bg.mesh.netcracker.com"
 
 const IgnoreApiConverterAnnotation = "gateway-api-converter.netcracker.com/ignore"
 const errPlaceIngressIntoCache = "failed to place ingress into cache: %w"
+const IngressCreated = "Ingress created: %s"
+const RouteDeleteFailed = "Route delete failed: %s"
 
 const (
 	AnnotationBackendProtocol   = "nginx.ingress.kubernetes.io/backend-protocol"
@@ -72,7 +74,7 @@ func (kube *Kubernetes) CreateRoute(ctx context.Context, route *entity.Route, na
 		routeResult, err := kube.createRouteLegacyIngress(ctx, route, namespace)
 		ingressRes = routeResourceResult{route: routeResult, status: routeStatusCreated, err: err}
 		if err == nil {
-			logger.InfoC(ctx, "Ingress created: %s", route.Name)
+			logger.InfoC(ctx, IngressCreated, route.Name)
 		}
 	}
 
@@ -147,14 +149,11 @@ func formatDualModeDeleteRouteStatus(httpRouteErr, ingressErr error) string {
 }
 
 func routeResourceDeleteStatus(name string, err error) string {
-	switch {
-	case err == nil:
+	if err == nil {
 		return name + ": deleted"
-	case paasErrors.IsNotFound(err):
-		return name + ": not found"
-	default:
-		return fmt.Sprintf("%s: error: %v", name, err)
 	}
+
+	return fmt.Sprintf("%s: error: %v", name, err)
 }
 
 func (kube *Kubernetes) createRouteLegacyIngress(ctx context.Context, route *entity.Route, namespace string) (*entity.Route, error) {
@@ -276,7 +275,7 @@ func (kube *Kubernetes) upsertNetworkingV1Ingress(ctx context.Context, route *en
 			logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
 			ingressResult, createErr := kube.createRouteLegacyIngress(ctx, route, namespace)
 			if createErr == nil {
-				logger.InfoC(ctx, "Ingress created: %s", route.Name)
+				logger.InfoC(ctx, IngressCreated, route.Name)
 			}
 			return routeResourceResult{route: ingressResult, status: routeStatusCreated, err: createErr}
 		}
@@ -312,7 +311,7 @@ func (kube *Kubernetes) upsertExtensionsV1Ingress(ctx context.Context, route *en
 			logger.WarnC(ctx, "Ingress %s not found. Creating new", route.Name)
 			ingressResult, createErr := kube.createRouteLegacyIngress(ctx, route, namespace)
 			if createErr == nil {
-				logger.InfoC(ctx, "Ingress created: %s", route.Name)
+				logger.InfoC(ctx, IngressCreated, route.Name)
 			}
 			return routeResourceResult{route: ingressResult, status: routeStatusCreated, err: createErr}
 		}
@@ -375,12 +374,12 @@ func resolveDeleteRouteResult(
 		status := formatDualModeDeleteRouteStatus(httpRouteErr, ingressErr)
 
 		if paasErrors.IsNotFound(httpRouteErr) && paasErrors.IsNotFound(ingressErr) {
-			logger.Warn("Route delete failed: %s", status)
+			logger.Warn(RouteDeleteFailed, status)
 			return newRouteDeleteNotFoundError(routeName, status)
 		}
 
 		if isDeleteFailure(httpRouteErr) || isDeleteFailure(ingressErr) {
-			logger.Error("Route delete failed: %s", status)
+			logger.Error(RouteDeleteFailed, status)
 			return paasErrors.NewInternalError(fmt.Errorf("%s", status))
 		}
 
@@ -406,10 +405,10 @@ func resolveSingleResourceDeleteResult(resourceName string, err error) error {
 		return nil
 	}
 	if isDeleteFailure(err) {
-		logger.Error("Route delete failed: %s", status)
+		logger.Error(RouteDeleteFailed, status)
 		return paasErrors.NewInternalError(fmt.Errorf("%s", status))
 	}
-	logger.Warn("Route delete failed: %s", status)
+	logger.Warn(RouteDeleteFailed, status)
 	return err
 }
 
