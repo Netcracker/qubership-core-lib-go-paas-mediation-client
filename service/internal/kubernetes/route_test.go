@@ -818,8 +818,8 @@ func Test_DeleteRoute_DualMode_BothNotFound_ReturnsNotFound(t *testing.T) {
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
 	assertions.True(paasErrors.IsNotFound(err))
-	assertions.Contains(err.Error(), "httproute: not found")
-	assertions.Contains(err.Error(), "ingress: not found")
+	assertions.Regexp(`httproute: .* not found,`, err.Error())
+	assertions.Regexp(`, ingress: .* not found`, err.Error())
 }
 
 func Test_DeleteRoute_DualMode_DeletesBoth(t *testing.T) {
