@@ -7,9 +7,9 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.5.8
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.5.3
-	github.com/netcracker/qubership-core-lib-go/v3 v3.9.1
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.5.9
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.5.4
+	github.com/netcracker/qubership-core-lib-go/v3 v3.10.0
 	github.com/openshift/api v0.0.0-20260424174501-4f63a40a2970
 	github.com/openshift/client-go v0.0.0-20260428164731-4b85fc5b4e75
 	github.com/smarty/assertions v1.16.0
