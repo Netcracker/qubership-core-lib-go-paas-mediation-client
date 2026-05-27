@@ -9,6 +9,7 @@ import (
 	networkingV1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 const (
@@ -437,4 +438,259 @@ func TestNewRouteFromInterface(t *testing.T) {
 	route := createSimpleRoute("", 0)
 	route.Spec.IngressClassName = nil // OpenShift does not support IngressClassName
 	assert.Equal(t, route, NewRouteFromInterface(createRouteMap()))
+}
+
+func TestToHTTPRoute(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+
+	assert.Equal(t, testName, httpRoute.Name)
+	assert.Equal(t, testNamespace, httpRoute.Namespace)
+	assert.Equal(t, 1, len(httpRoute.Spec.ParentRefs))
+	assert.Equal(t, "default-external-gateway", string(httpRoute.Spec.ParentRefs[0].Name))
+	assert.Equal(t, "gateway-system", string(*httpRoute.Spec.ParentRefs[0].Namespace))
+	assert.Equal(t, 1, len(httpRoute.Spec.Hostnames))
+	assert.Equal(t, testHost, string(httpRoute.Spec.Hostnames[0]))
+	assert.Equal(t, 1, len(httpRoute.Spec.Rules))
+	assert.Equal(t, testPath, *httpRoute.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, testServiceName, string(httpRoute.Spec.Rules[0].BackendRefs[0].Name))
+	assert.Equal(t, int32(testPort), int32(*httpRoute.Spec.Rules[0].BackendRefs[0].Port))
+}
+
+func TestToHTTPRoute_WithDefaults(t *testing.T) {
+	route := &Route{
+		Metadata: Metadata{
+			Name:      testName,
+			Namespace: testNamespace,
+		},
+		Spec: RouteSpec{
+			Host:    testHost,
+			Service: Target{Name: testServiceName},
+		},
+	}
+
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+
+	assert.Equal(t, "/", *httpRoute.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, int32(8080), int32(*httpRoute.Spec.Rules[0].BackendRefs[0].Port))
+	assert.Equal(t, "PathPrefix", string(*httpRoute.Spec.Rules[0].Matches[0].Path.Type))
+}
+
+func TestToHTTPRoute_WithSessionAffinity(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationAffinity:            "cookie",
+		AnnotationSessionCookieName:   "my-cookie",
+		AnnotationSessionCookieMaxAge: "3600",
+	}
+
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+
+	assert.NotNil(t, httpRoute.Spec.Rules[0].SessionPersistence)
+	assert.Equal(t, "my-cookie", *httpRoute.Spec.Rules[0].SessionPersistence.SessionName)
+	assert.Equal(t, "3600s", string(*httpRoute.Spec.Rules[0].SessionPersistence.AbsoluteTimeout))
+}
+
+func TestToHTTPRoute_WithTimeouts(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationProxyReadTimeout: "1800",
+	}
+
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+
+	assert.NotNil(t, httpRoute.Spec.Rules[0].Timeouts)
+	assert.Equal(t, "1800s", string(*httpRoute.Spec.Rules[0].Timeouts.Request))
+}
+
+func TestPathMatchTypeFromRoute(t *testing.T) {
+	tests := []struct {
+		name     string
+		pathType string
+		expected string
+	}{
+		{"Empty defaults to PathPrefix", "", "PathPrefix"},
+		{"Exact maps to Exact", "Exact", "Exact"},
+		{"Prefix maps to PathPrefix", "Prefix", "PathPrefix"},
+		{"ImplementationSpecific maps to PathPrefix", "ImplementationSpecific", "PathPrefix"},
+		{"Unknown defaults to PathPrefix", "Unknown", "PathPrefix"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pathMatchTypeFromRoute(tt.pathType)
+			assert.Equal(t, tt.expected, string(result))
+		})
+	}
+}
+
+func TestRoutePathValue(t *testing.T) {
+	assert.Equal(t, "/", routePathValue(""))
+	assert.Equal(t, "/api", routePathValue("/api"))
+}
+
+func TestRouteBackendPort(t *testing.T) {
+	assert.Equal(t, int32(8080), int32(routeBackendPort(0)))
+	assert.Equal(t, int32(9090), int32(routeBackendPort(9090)))
+}
+
+func TestRouteFromHTTPRoute(t *testing.T) {
+	pathType := "PathPrefix"
+	pathValue := "/test-path"
+	port := int32(8080)
+	hostname := "example.com"
+
+	httpRoute := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testName,
+			Namespace: testNamespace,
+		},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(hostname)},
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					Matches: []gatewayv1.HTTPRouteMatch{
+						{
+							Path: &gatewayv1.HTTPPathMatch{
+								Type:  (*gatewayv1.PathMatchType)(&pathType),
+								Value: &pathValue,
+							},
+						},
+					},
+					BackendRefs: []gatewayv1.HTTPBackendRef{
+						{
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Name: gatewayv1.ObjectName(testServiceName),
+									Port: (*gatewayv1.PortNumber)(&port),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	route := RouteFromHTTPRoute(httpRoute)
+
+	assert.Equal(t, testName, route.Metadata.Name)
+	assert.Equal(t, testNamespace, route.Metadata.Namespace)
+	assert.Equal(t, hostname, route.Spec.Host)
+	assert.Equal(t, pathValue, route.Spec.Path)
+	assert.Equal(t, pathType, route.Spec.PathType)
+	assert.Equal(t, testServiceName, route.Spec.Service.Name)
+	assert.Equal(t, port, route.Spec.Port.TargetPort)
+}
+
+func TestRouteFromHTTPRoute_EmptyRules(t *testing.T) {
+	httpRoute := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testName,
+			Namespace: testNamespace,
+		},
+		Spec: gatewayv1.HTTPRouteSpec{},
+	}
+
+	route := RouteFromHTTPRoute(httpRoute)
+
+	assert.Equal(t, testName, route.Metadata.Name)
+	assert.Equal(t, "", route.Spec.Host)
+	assert.Equal(t, "", route.Spec.Path)
+	assert.Equal(t, "", route.Spec.Service.Name)
+	assert.Equal(t, int32(0), route.Spec.Port.TargetPort)
+}
+
+func TestBuildSessionPersistence(t *testing.T) {
+	annotations := map[string]string{
+		AnnotationAffinity:            "cookie",
+		AnnotationSessionCookieName:   "test-cookie",
+		AnnotationSessionCookieMaxAge: "7200",
+	}
+
+	sessionPersistence := buildSessionPersistence(annotations)
+
+	assert.NotNil(t, sessionPersistence)
+	assert.Equal(t, "test-cookie", *sessionPersistence.SessionName)
+	assert.Equal(t, "7200s", string(*sessionPersistence.AbsoluteTimeout))
+}
+
+func TestBuildTimeouts(t *testing.T) {
+	tests := []struct {
+		name            string
+		annotations     map[string]string
+		expectNil       bool
+		expectedRequest string
+	}{
+		{
+			name: "With proxy-read-timeout",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "1800",
+			},
+			expectedRequest: "1800s",
+		},
+		{
+			name: "With proxy-send-timeout",
+			annotations: map[string]string{
+				AnnotationProxySendTimeout: "900",
+			},
+			expectedRequest: "900s",
+		},
+		{
+			name: "With proxy-connect-timeout only",
+			annotations: map[string]string{
+				AnnotationProxyConnectTimeout: "600",
+			},
+			expectNil: true,
+		},
+		{
+			name:        "Without timeout annotations",
+			annotations: map[string]string{},
+			expectNil:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			timeouts := buildTimeouts(tt.annotations)
+			if tt.expectNil {
+				assert.Nil(t, timeouts)
+				return
+			}
+			assert.NotNil(t, timeouts)
+			assert.NotNil(t, timeouts.Request)
+			assert.Equal(t, tt.expectedRequest, string(*timeouts.Request))
+		})
+	}
+}
+
+func TestNormalizeRouteAnnotations(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		expectEmpty bool
+	}{
+		{
+			name:        "Nil annotations",
+			annotations: nil,
+			expectEmpty: true,
+		},
+		{
+			name:        "Non-nil annotations",
+			annotations: map[string]string{"key": "value"},
+			expectEmpty: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeRouteAnnotations(tt.annotations)
+			assert.NotNil(t, result)
+			if tt.expectEmpty {
+				assert.Empty(t, result)
+			} else {
+				assert.Equal(t, tt.annotations, result)
+			}
+		})
+	}
 }

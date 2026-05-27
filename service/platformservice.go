@@ -168,7 +168,7 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 	if err != nil {
 		return nil, err
 	}
-	kubeClient, err := kubernetes.NewKubernetesClientBuilder().
+	kubeClientBuilder := kubernetes.NewKubernetesClientBuilder().
 		WithNamespace(namespace).
 		WithClient(kubernetesClient).
 		WithRolloutExecutor(rolloutExecutor).
@@ -176,8 +176,39 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 		WithWatchClientTimeout(watchClientTimeout).
 		WithBadResources(builder.badResources).
 		WithCache(resourcesCache).
-		WithBG2Enabled(bg2EnabledFunc).
-		Build()
+		WithBG2Enabled(bg2EnabledFunc)
+
+	var gatewaySystemType string
+	if builder.gatewaySystemType != nil {
+		gatewaySystemType = *builder.gatewaySystemType
+	} else {
+		gatewaySystemType = configloader.GetOrDefaultString(kubernetes.GatewaySystemTypeProperty, "")
+	}
+	if gatewaySystemType != "" {
+		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemType(gatewaySystemType)
+	}
+
+	var gatewaySystemNamespace string
+	if builder.gatewaySystemNamespace != nil {
+		gatewaySystemNamespace = *builder.gatewaySystemNamespace
+	} else {
+		gatewaySystemNamespace = configloader.GetOrDefaultString(kubernetes.GatewaySystemNamespaceProperty, "")
+	}
+	if gatewaySystemNamespace != "" {
+		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemNamespace(gatewaySystemNamespace)
+	}
+
+	var gatewaySystemName string
+	if builder.gatewaySystemName != nil {
+		gatewaySystemName = *builder.gatewaySystemName
+	} else {
+		gatewaySystemName = configloader.GetOrDefaultString(kubernetes.GatewaySystemNameProperty, "")
+	}
+	if gatewaySystemName != "" {
+		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)
+	}
+
+	kubeClient, err := kubeClientBuilder.Build()
 
 	if err != nil {
 		return nil, err

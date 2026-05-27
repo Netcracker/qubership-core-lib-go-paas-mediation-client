@@ -111,3 +111,44 @@ func TestCreatePlatformService_Consul_Enabled(t *testing.T) {
 func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
+
+func TestCreatePlatformService_WithGatewaySystemFromBuilder_k8s(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("kubernetes")
+	defer cleanUpEnv()
+
+	builder := NewPlatformClientBuilder().
+		WithPlatformType(types.Kubernetes).
+		WithClients(prepareFakeClients()).
+		WithNamespace(testNamespace).
+		WithWatchExecutor(getTestWatchExecutor(t)).
+		WithGatewaySystemType("gateway-api-default").
+		WithGatewaySystemNamespace("builder-ns").
+		WithGatewaySystemName("builder-gateway")
+
+	client, err := createPlatformService(builder)
+	r.NoError(err)
+	kube := getK8sEntityFromClient(client)
+	r.Equal("gateway-api-default", kube.GatewaySystem.Type)
+	r.Equal("builder-ns", kube.GatewaySystem.Namespace)
+	r.Equal("builder-gateway", kube.GatewaySystem.Name)
+}
+
+func TestCreatePlatformService_GatewaySystemDefaultsWithoutConfig_k8s(t *testing.T) {
+	r := require.New(t)
+	prepareEnv("kubernetes")
+	defer cleanUpEnv()
+
+	builder := NewPlatformClientBuilder().
+		WithPlatformType(types.Kubernetes).
+		WithClients(prepareFakeClients()).
+		WithNamespace(testNamespace).
+		WithWatchExecutor(getTestWatchExecutor(t))
+
+	client, err := createPlatformService(builder)
+	r.NoError(err)
+	kube := getK8sEntityFromClient(client)
+	r.Empty(kube.GatewaySystem.Type)
+	r.Equal("gateway-system", kube.GatewaySystem.Namespace)
+	r.Equal("default-external-gateway", kube.GatewaySystem.Name)
+}

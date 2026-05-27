@@ -6,9 +6,19 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	networkingV1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var logger = logging.GetLogger("entity_route")
+
+const (
+	AnnotationAffinity            = "nginx.ingress.kubernetes.io/affinity"
+	AnnotationSessionCookieName   = "nginx.ingress.kubernetes.io/session-cookie-name"
+	AnnotationSessionCookieMaxAge = "nginx.ingress.kubernetes.io/session-cookie-max-age"
+	AnnotationProxyReadTimeout    = "nginx.ingress.kubernetes.io/proxy-read-timeout"
+	AnnotationProxySendTimeout    = "nginx.ingress.kubernetes.io/proxy-send-timeout"
+	AnnotationProxyConnectTimeout = "nginx.ingress.kubernetes.io/proxy-connect-timeout"
+)
 
 type (
 	// todo change to Ingress in next major release AND REWRITE entity to comply with Ingress structure!
@@ -237,4 +247,177 @@ func NewRouteFromInterface(object any) *Route {
 
 func (route Route) GetMetadata() Metadata {
 	return route.Metadata
+}
+
+func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.HTTPRoute {
+	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
+
+	httpRoute := &gatewayv1.HTTPRoute{
+		ObjectMeta: *route.Metadata.ToObjectMeta(),
+	}
+
+	ns := gatewayv1.Namespace(gatewayNamespace)
+	httpRoute.Spec.ParentRefs = []gatewayv1.ParentReference{
+		{
+			Name:      gatewayv1.ObjectName(gatewayName),
+			Namespace: &ns,
+		},
+	}
+
+	httpRoute.Spec.Hostnames = []gatewayv1.Hostname{gatewayv1.Hostname(route.Spec.Host)}
+	httpRoute.Spec.Rules = []gatewayv1.HTTPRouteRule{buildHTTPRouteRule(route, annotations)}
+
+	return httpRoute
+}
+
+func normalizeRouteAnnotations(annotations map[string]string) map[string]string {
+	if annotations == nil {
+		return make(map[string]string)
+	}
+	return annotations
+}
+
+func pathMatchTypeFromRoute(pathType string) gatewayv1.PathMatchType {
+	if pathType == "Exact" {
+		return gatewayv1.PathMatchExact
+	}
+	return gatewayv1.PathMatchPathPrefix
+}
+
+func routePathValue(path string) string {
+	if path == "" {
+		return "/"
+	}
+	return path
+}
+
+func routeBackendPort(targetPort int32) gatewayv1.PortNumber {
+	if targetPort == 0 {
+		return 8080
+	}
+	return gatewayv1.PortNumber(targetPort)
+}
+
+func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HTTPRouteRule {
+	pathType := pathMatchTypeFromRoute(route.Spec.PathType)
+	path := routePathValue(route.Spec.Path)
+	port := routeBackendPort(route.Spec.Port.TargetPort)
+
+	rule := gatewayv1.HTTPRouteRule{
+		Matches: []gatewayv1.HTTPRouteMatch{
+			{
+				Path: &gatewayv1.HTTPPathMatch{
+					Type:  &pathType,
+					Value: &path,
+				},
+			},
+		},
+		BackendRefs: []gatewayv1.HTTPBackendRef{
+			{
+				BackendRef: gatewayv1.BackendRef{
+					BackendObjectReference: gatewayv1.BackendObjectReference{
+						Name: gatewayv1.ObjectName(route.Spec.Service.Name),
+						Port: &port,
+					},
+				},
+			},
+		},
+	}
+
+	if affinity, exists := annotations[AnnotationAffinity]; exists && affinity == "cookie" {
+		if sessionPersistence := buildSessionPersistence(annotations); sessionPersistence != nil {
+			rule.SessionPersistence = sessionPersistence
+		}
+	}
+
+	if timeouts := buildTimeouts(annotations); timeouts != nil {
+		rule.Timeouts = timeouts
+	}
+
+	return rule
+}
+
+func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPersistence {
+	persistenceType := gatewayv1.CookieBasedSessionPersistence
+	sessionPersistence := &gatewayv1.SessionPersistence{
+		Type: &persistenceType,
+	}
+
+	if cookieName := annotations["nginx.ingress.kubernetes.io/session-cookie-name"]; cookieName != "" {
+		sessionPersistence.SessionName = &cookieName
+	}
+
+	if maxAge := annotations["nginx.ingress.kubernetes.io/session-cookie-max-age"]; maxAge != "" {
+		timeout := gatewayv1.Duration(maxAge + "s")
+		sessionPersistence.AbsoluteTimeout = &timeout
+	}
+
+	return sessionPersistence
+}
+
+func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
+	if connectTimeout := annotations[AnnotationProxyConnectTimeout]; connectTimeout != "" {
+		logger.Warn("annotation %s=%s requires BackendTrafficPolicy and is not applied to HTTPRoute", AnnotationProxyConnectTimeout, connectTimeout)
+	}
+
+	requestTimeoutValue := ""
+	if readTimeout := annotations[AnnotationProxyReadTimeout]; readTimeout != "" {
+		requestTimeoutValue = readTimeout
+	} else if sendTimeout := annotations[AnnotationProxySendTimeout]; sendTimeout != "" {
+		requestTimeoutValue = sendTimeout
+	}
+
+	if requestTimeoutValue == "" {
+		return nil
+	}
+
+	timeout := gatewayv1.Duration(requestTimeoutValue + "s")
+	return &gatewayv1.HTTPRouteTimeouts{Request: &timeout}
+}
+
+func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
+	logger.Debugf("Processing RouteFromHTTPRoute, httpRoute: %s", httpRoute.Name)
+
+	var routeSpec RouteSpec
+	if len(httpRoute.Spec.Rules) > 0 &&
+		len(httpRoute.Spec.Rules[0].BackendRefs) > 0 &&
+		len(httpRoute.Spec.Rules[0].Matches) > 0 {
+
+		backendRef := httpRoute.Spec.Rules[0].BackendRefs[0]
+		match := httpRoute.Spec.Rules[0].Matches[0]
+
+		target := Target{Name: string(backendRef.Name)}
+
+		var port int32
+		if backendRef.Port != nil {
+			port = int32(*backendRef.Port)
+		}
+
+		var pathType string
+		var path string
+		if match.Path != nil {
+			if match.Path.Type != nil {
+				pathType = string(*match.Path.Type)
+			}
+			if match.Path.Value != nil {
+				path = *match.Path.Value
+			}
+		}
+
+		var host string
+		if len(httpRoute.Spec.Hostnames) > 0 {
+			host = string(httpRoute.Spec.Hostnames[0])
+		}
+
+		routeSpec = RouteSpec{
+			Service:  target,
+			Port:     RoutePort{TargetPort: port},
+			PathType: pathType,
+			Path:     path,
+			Host:     host,
+		}
+	}
+
+	metadata := *FromObjectMeta("Route", &httpRoute.ObjectMeta)
+	return &Route{Spec: routeSpec, Metadata: metadata}
 }

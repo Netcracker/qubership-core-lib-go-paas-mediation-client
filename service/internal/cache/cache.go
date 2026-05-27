@@ -120,7 +120,10 @@ func newEntityAdapter[T entity.HasMetadata](sharedAdapter *ristrettoCacheAdapter
 func (cache *ResourceCache[T]) Set(ctx context.Context, resource T) (bool, error) {
 	metadata := resource.GetMetadata()
 	ok := cache.Cache.Set(cache.Kind, metadata.Namespace, metadata.Name, resource)
-	return ok, nil
+	if !ok {
+		return false, fmt.Errorf("failed to place %s/%s/%s into cache", cache.Kind, metadata.Namespace, metadata.Name)
+	}
+	return true, nil
 }
 
 func (cache *ResourceCache[T]) Delete(ctx context.Context, namespace string, name string) {

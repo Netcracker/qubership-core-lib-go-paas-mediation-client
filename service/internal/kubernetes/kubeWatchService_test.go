@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 )
 
@@ -43,6 +44,9 @@ func newFakeWatchExecutor() *fakeWatchExecutor {
 func (e *fakeWatchExecutor) CreateWatchRequest(restClient rest.Interface, resource types.PaasResourceType, options *v1.ListOptions) *rest.Request {
 	e.requestedResources = resource.String()
 	e.requestedOptions = options
+	if restClient != nil {
+		return restClient.Get().Resource(resource.String()).VersionedParams(options, scheme.ParameterCodec)
+	}
 	return &rest.Request{}
 }
 
@@ -220,7 +224,7 @@ func TestWatchGatewayHTTPRoutesAddedEvent(t *testing.T) {
 		for watchEvent := range watchHandler.Channel {
 			logger.Info("Get event %s", watchEvent.Type)
 			r.Equal("ADDED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(route)
+			expected := entity.WrapHTTPRoute(route)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
@@ -308,7 +312,7 @@ func TestWatchGatewayHTTPRoutesDeletedEvent(t *testing.T) {
 		for watchEvent := range watchHandler.Channel {
 			logger.Info("Get event %s", watchEvent.Type)
 			r.Equal("DELETED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(route)
+			expected := entity.WrapHTTPRoute(route)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
