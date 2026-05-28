@@ -128,3 +128,4 @@ consul.token prop / CONSUL_TOKEN env
     ```
     client, err := service.NewPlatformClientBuilder().Build()
     ```
+
