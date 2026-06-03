@@ -756,7 +756,6 @@ func Test_DeleteRoute_DualMode_HTTPRouteDeleted_IngressDeleteError_ReturnsFullSt
 	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
 	assertions.Error(err)
 	assertions.True(paasErrors.IsInternalError(err))
-	assertions.Contains(err.Error(), "httproute: deleted")
 	assertions.Contains(err.Error(), "ingress: error:")
 	assertions.Contains(err.Error(), "ingress delete failed")
 
@@ -781,7 +780,6 @@ func Test_DeleteRoute_DualMode_HTTPRouteDeleteError_IngressDeleted_ReturnsFullSt
 	assertions.True(paasErrors.IsInternalError(err))
 	assertions.Contains(err.Error(), "httproute: error:")
 	assertions.Contains(err.Error(), "httproute delete failed")
-	assertions.Contains(err.Error(), "ingress: deleted")
 
 	_, err = k8sClient.NetworkingV1().Ingresses(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
 	assertions.True(paasErrors.IsNotFound(err))
