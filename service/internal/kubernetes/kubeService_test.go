@@ -142,7 +142,7 @@ func TestGetConfigMapListWithLabelsAndAnnotations(t *testing.T) {
 }
 
 func TestGetRouteListWithLabelsAndAnnotations(t *testing.T) {
-	testGetResourceListWithLabelsAndAnnotations(t, "route")
+	testGetRouteListWithLabelsAndAnnotationsByGatewayType(t)
 }
 
 func TestGetCertificateListWithLabelsAndAnnotations(t *testing.T) {
@@ -181,9 +181,9 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 		CertmanagerInterface: &mock.CmClientset{},
 	}
 	var badResources = BadResources{NewBadRoutes()}
-	cache := cache.NewTestResourcesCache()
+	resourcesCache := cache.NewTestResourcesCache()
 	kubeClient := &Kubernetes{client: clientset, WatchExecutor: testWatchExecutor, namespace: testNamespace1,
-		Cache: cache, BadResources: &badResources}
+		Cache: resourcesCache, BadResources: &badResources}
 
 	var annotationMap = make(map[string]string)
 	annotationMap[annotationKey1] = annotationValue1
@@ -196,10 +196,10 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 		r.True(So(err, ShouldBeNil))
 		r.Equal(1, len(foundResources), "expect 1 service to be found")
 		r.Equal(foundResources[0].Name, resourceName1, "invalid service name")
-
+		// todo add tests with kubeClient.client.System.Type
 		//Broke client and test cache
 		kubeClient.client = badClientset
-		ok, err := cache.Services.Set(ctx, *entity.NewService(resource1.(*v1.Service)))
+		ok, err := resourcesCache.Services.Set(ctx, *entity.NewService(resource1.(*v1.Service)))
 		r.True(ok)
 		r.NoError(err)
 		foundResourceInCache, err := kubeClient.GetService(ctx, resourceName1, testNamespace1)
@@ -221,7 +221,7 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 		r.Equal(foundResources[0].Name, resourceName1, "invalid service name")
 		//Broke client and test cache
 		kubeClient.client = badClientset
-		ok, err := cache.Secrets.Set(ctx, *entity.NewSecret(resource1.(*v1.Secret)))
+		ok, err := resourcesCache.Secrets.Set(ctx, *entity.NewSecret(resource1.(*v1.Secret)))
 		r.True(ok)
 		r.NoError(err)
 		foundResourceInCache, err := kubeClient.GetSecret(ctx, resourceName1, testNamespace1)
@@ -235,23 +235,10 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 		r.Equal(foundResources[0].Name, resourceName1, "invalid service name")
 		//Broke client and test cache
 		kubeClient.client = badClientset
-		ok, err := cache.ConfigMaps.Set(ctx, *entity.NewConfigMap(resource1.(*v1.ConfigMap)))
+		ok, err := resourcesCache.ConfigMaps.Set(ctx, *entity.NewConfigMap(resource1.(*v1.ConfigMap)))
 		r.True(ok)
 		r.NoError(err)
 		foundResourceInCache, err := kubeClient.GetConfigMap(ctx, resourceName1, testNamespace1)
-		r.Nil(err)
-		r.Equal(foundResourceInCache.Name, resourceName1, "invalid service name")
-	case "route":
-		foundResources, err := kubeClient.GetRouteList(ctx, testNamespace1, filter.Meta{Annotations: annotationMap})
-		r.Nil(err)
-		r.Equal(1, len(foundResources), "expect 1 route to be found")
-		r.Equal(foundResources[0].Name, resourceName1, "invalid service name")
-		//Broke client and test cache
-		kubeClient.client = badClientset
-		ok, err := cache.Ingresses.Set(ctx, *entity.RouteFromIngress(resource1.(*v1beta1.Ingress)))
-		r.True(ok)
-		r.NoError(err)
-		foundResourceInCache, err := kubeClient.GetRoute(ctx, resourceName1, testNamespace1)
 		r.Nil(err)
 		r.Equal(foundResourceInCache.Name, resourceName1, "invalid service name")
 	case "certificate":
@@ -274,6 +261,149 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 	default:
 		r.False(false, "unsupported type "+resType)
 	}
+}
+
+func testGetRouteListWithLabelsAndAnnotationsByGatewayType(t *testing.T) {
+	t.Run(LegacyIngress, func(t *testing.T) {
+		testGetRouteListWithLabelsAndAnnotationsLegacyIngress(t)
+	})
+	t.Run(GatewayApiDefault, func(t *testing.T) {
+		testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t, GatewayApiDefault)
+	})
+	for _, gatewaySystemType := range []string{
+		LegacyIngress + "," + GatewayApiDefault,
+		GatewayApiDefault + "," + LegacyIngress,
+	} {
+		t.Run(gatewaySystemType, func(t *testing.T) {
+			testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t, gatewaySystemType)
+		})
+		t.Run(gatewaySystemType+"-empty-list-without-httproutes", func(t *testing.T) {
+			testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t, gatewaySystemType)
+		})
+	}
+}
+
+func testGetRouteListWithLabelsAndAnnotationsLegacyIngress(t *testing.T) {
+	r := require.New(t)
+	ctx := context.Background()
+	testWatchExecutor := newFakeWatchExecutor()
+
+	resourceAnnotationMap1 := map[string]string{
+		annotationKey1: annotationValue1,
+		annotationKey2: annotationValue2,
+	}
+	resourceName1 := "test-resource-1"
+	resource1 := createTestRoute(resourceName1, testNamespace1, nil, resourceAnnotationMap1)
+
+	resourceAnnotationMap2 := map[string]string{
+		annotationKey2: annotationValue2,
+		annotationKey3: annotationValue3,
+	}
+	resourceName2 := "test-resource-2"
+	resource2 := createTestRoute(resourceName2, testNamespace1, nil, resourceAnnotationMap2)
+
+	clientset := fake.NewClientset(resource1, resource2)
+	kubeClient := &Kubernetes{
+		client:        &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: &certClient.Clientset{}},
+		WatchExecutor: testWatchExecutor,
+		namespace:     testNamespace1,
+		Cache:         cache.NewTestResourcesCache(),
+		BadResources:  &BadResources{Routes: NewBadRoutes()},
+		GatewaySystem: GatewaySystem{Type: LegacyIngress},
+	}
+	annotationMap := map[string]string{annotationKey1: annotationValue1, annotationKey2: annotationValue2}
+
+	foundResources, err := kubeClient.GetRouteList(ctx, testNamespace1, filter.Meta{Annotations: annotationMap})
+	r.NoError(err)
+	r.Len(foundResources, 1)
+	r.Equal(resourceName1, foundResources[0].Name)
+
+	kubeClient.client = &backend.KubernetesApi{KubernetesInterface: &mock.KubeClientset{}, CertmanagerInterface: &mock.CmClientset{}}
+	ok, err := kubeClient.Cache.Ingresses.Set(ctx, *entity.RouteFromIngress(resource1))
+	r.True(ok)
+	r.NoError(err)
+	foundResourceInCache, err := kubeClient.GetRoute(ctx, resourceName1, testNamespace1)
+	r.NoError(err)
+	r.Equal(resourceName1, foundResourceInCache.Name)
+}
+
+func testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t *testing.T, gatewaySystemType string) {
+	r := require.New(t)
+	r.True(GatewaySystem{Type: gatewaySystemType}.IsGatewayAPIEnabled(),
+		"GetRouteList must use HTTPRoutes when GATEWAY_SYSTEM_TYPE contains %q", GatewayApiDefault)
+	ctx := context.Background()
+	testWatchExecutor := newFakeWatchExecutor()
+
+	resourceAnnotationMap1 := map[string]string{
+		annotationKey1: annotationValue1,
+		annotationKey2: annotationValue2,
+	}
+	resourceName1 := "test-resource-1"
+	httpRoute1 := createTestHTTPRoute(resourceName1, testNamespace1, nil, resourceAnnotationMap1)
+
+	resourceAnnotationMap2 := map[string]string{
+		annotationKey2: annotationValue2,
+		annotationKey3: annotationValue3,
+	}
+	resourceName2 := "test-resource-2"
+	httpRoute2 := createTestHTTPRoute(resourceName2, testNamespace1, nil, resourceAnnotationMap2)
+
+	ingress1 := createTestRoute(resourceName1, testNamespace1, nil, resourceAnnotationMap1)
+	ingress2 := createTestRoute(resourceName2, testNamespace1, nil, resourceAnnotationMap2)
+
+	kubeClientSet := fake.NewClientset(ingress1, ingress2)
+	gwClient := gatewayclientfake.NewSimpleClientset(httpRoute1, httpRoute2)
+	kubeClient := &Kubernetes{
+		client:        newBuildTestKubernetesAPI(kubeClientSet, gwClient),
+		WatchExecutor: testWatchExecutor,
+		namespace:     testNamespace1,
+		Cache:         cache.NewTestResourcesCache(cache.HttpRouteCache),
+		BadResources:  &BadResources{Routes: NewBadRoutes()},
+		GatewaySystem: GatewaySystem{Type: gatewaySystemType},
+	}
+	annotationMap := map[string]string{annotationKey1: annotationValue1, annotationKey2: annotationValue2}
+
+	foundResources, err := kubeClient.GetRouteList(ctx, testNamespace1, filter.Meta{Annotations: annotationMap})
+	r.NoError(err)
+	r.Len(foundResources, 1)
+	r.Equal(resourceName1, foundResources[0].Name)
+
+	badRoutes, err := kubeClient.GetBadRouteLists(ctx)
+	r.NoError(err)
+	r.Empty(badRoutes)
+
+	gwClientForCache := gatewayclientfake.NewSimpleClientset()
+	gwClientForCache.PrependReactor("get", "httproutes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("error test")
+	})
+	kubeClient.client = newBuildTestKubernetesAPI(fake.NewClientset(), gwClientForCache)
+	ok, err := kubeClient.Cache.HTTPRoute.Set(ctx, *entity.WrapHTTPRoute(httpRoute1))
+	r.True(ok)
+	r.NoError(err)
+	foundResourceInCache, err := kubeClient.GetRoute(ctx, resourceName1, testNamespace1)
+	r.NoError(err)
+	r.Equal(resourceName1, foundResourceInCache.Name)
+}
+
+func testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t *testing.T, gatewaySystemType string) {
+	r := require.New(t)
+	gatewaySystem := GatewaySystem{Type: gatewaySystemType}
+	r.True(gatewaySystem.IsGatewayAPIEnabled())
+	r.True(gatewaySystem.IsIngressEnabled())
+	ctx := context.Background()
+
+	ingress1 := createTestRoute("test-resource-1", testNamespace1, nil, map[string]string{annotationKey1: annotationValue1})
+	kubeClient := &Kubernetes{
+		client:        newBuildTestKubernetesAPI(fake.NewClientset(ingress1), gatewayclientfake.NewSimpleClientset()),
+		namespace:     testNamespace1,
+		Cache:         cache.NewTestResourcesCache(),
+		BadResources:  &BadResources{Routes: NewBadRoutes()},
+		GatewaySystem: gatewaySystem,
+	}
+
+	foundResources, err := kubeClient.GetRouteList(ctx, testNamespace1, filter.Meta{Annotations: map[string]string{annotationKey1: annotationValue1}})
+	r.NoError(err)
+	r.Empty(foundResources)
 }
 
 func createTestResource(resType string, name string, namespace string, labels map[string]string,
@@ -333,6 +463,32 @@ func createTestConfigMap(name string, namespace string, labels map[string]string
 	annotations map[string]string) *v1.ConfigMap {
 	return &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels,
 		Annotations: annotations}}
+}
+
+func createTestHTTPRoute(name string, namespace string, labels map[string]string,
+	annotations map[string]string) *gatewayv1.HTTPRoute {
+	pathType := gatewayv1.PathMatchPathPrefix
+	pathValue := "/test-path-for-route-" + name
+	port := gatewayv1.PortNumber(8080)
+	hostname := gatewayv1.Hostname("test-host-for-route-" + name)
+	serviceName := gatewayv1.ObjectName("test-service-name-for-route-" + name)
+
+	return &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels, Annotations: annotations},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Hostnames: []gatewayv1.Hostname{hostname},
+			Rules: []gatewayv1.HTTPRouteRule{{
+				Matches: []gatewayv1.HTTPRouteMatch{{
+					Path: &gatewayv1.HTTPPathMatch{Type: &pathType, Value: &pathValue},
+				}},
+				BackendRefs: []gatewayv1.HTTPBackendRef{{
+					BackendRef: gatewayv1.BackendRef{
+						BackendObjectReference: gatewayv1.BackendObjectReference{Name: serviceName, Port: &port},
+					},
+				}},
+			}},
+		},
+	}
 }
 
 func createTestRoute(name string, namespace string, labels map[string]string,

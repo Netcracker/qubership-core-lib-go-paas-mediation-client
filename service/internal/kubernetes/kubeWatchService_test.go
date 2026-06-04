@@ -60,6 +60,7 @@ func TestWatchRoutesAddedEvent(t *testing.T) {
 	clientset := &kubernetes.Clientset{}
 	cert_client := &certClient.Clientset{}
 	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: "test-ns",
+		GatewaySystem: GatewaySystem{Type: LegacyIngress},
 		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
@@ -84,6 +85,7 @@ func TestWatchRoutesAddedEventUseNetworkingV1(t *testing.T) {
 	clientset := &kubernetes.Clientset{}
 	cert_client := &certClient.Clientset{}
 	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: "test-ns",
+		GatewaySystem: GatewaySystem{Type: LegacyIngress},
 		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
