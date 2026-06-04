@@ -582,6 +582,7 @@ func Test_dualModeRouteError_ShowsHintOnCreatePartialFailure(t *testing.T) {
 		routeResourceResult{status: routeStatusCreated},
 		routeResourceResult{status: routeStatusCreated, err: paasErrors.NewInternalError(fmt.Errorf("ingress create failed"))},
 	)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), "try using Update endpoint")
 }
 
