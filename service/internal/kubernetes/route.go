@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -107,13 +108,17 @@ func resolveRouteResult(
 }
 
 func dualModeRouteError(httpRouteRes, ingressRes routeResourceResult) error {
+	if httpRouteRes.err == nil && ingressRes.err == nil {
+		return nil
+	}
+
 	if httpRouteRes.err == nil || ingressRes.err == nil {
-		failedErr := httpRouteRes.err
-		if failedErr == nil {
-			failedErr = ingressRes.err
-		}
-		status := formatDualModeRouteStatus(httpRouteRes, ingressRes)
-		return fmt.Errorf("%s%s: %w", status, dualModeRouteUpdateHint, failedErr)
+		return fmt.Errorf(
+			"%s%s: %w",
+			formatDualModeRouteStatus(httpRouteRes, ingressRes),
+			dualModeRouteUpdateHint,
+			cmp.Or(httpRouteRes.err, ingressRes.err),
+		)
 	}
 
 	return fmt.Errorf("httproute: error: %w, ingress: error: %w", httpRouteRes.err, ingressRes.err)
