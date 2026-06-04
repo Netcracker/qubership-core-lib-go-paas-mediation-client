@@ -374,9 +374,10 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 	if kube.UseNetworkingV1Ingress {
 		return GetWrapper(ctx, resourceName, namespace, kube.getNetworkingV1Client().Ingresses(namespace).Get,
 			kube.Cache.Ingresses, entity.RouteFromIngressNetworkingV1)
+	} else {
+		return GetWrapper(ctx, resourceName, namespace, kube.getExtensionsV1Client().Ingresses(namespace).Get,
+			kube.Cache.Ingresses, entity.RouteFromIngress)
 	}
-	return GetWrapper(ctx, resourceName, namespace, kube.getExtensionsV1Client().Ingresses(namespace).Get,
-		kube.Cache.Ingresses, entity.RouteFromIngress)
 }
 
 func (kube *Kubernetes) DeleteRoute(ctx context.Context, routeName, namespace string) error {
@@ -528,17 +529,18 @@ func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filt
 				}
 				return
 			})
-	}
-	return ListWrapper(ctx, filter, kube.getExtensionsV1Client().Ingresses(namespace).List, kube.Cache.Ingresses,
-		func(listObj *v1beta1.IngressList) (result []entity.Route) {
-			for _, item := range listObj.Items {
-				route := entity.RouteFromIngress(&item)
-				if route != nil {
-					result = append(result, *route)
+	} else {
+		return ListWrapper(ctx, filter, kube.getExtensionsV1Client().Ingresses(namespace).List, kube.Cache.Ingresses,
+			func(listObj *v1beta1.IngressList) (result []entity.Route) {
+				for _, item := range listObj.Items {
+					route := entity.RouteFromIngress(&item)
+					if route != nil {
+						result = append(result, *route)
+					}
 				}
-			}
-			return
-		})
+				return
+			})
+	}
 }
 
 func (kube *Kubernetes) GetHttpRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.HttpRoute, error) {
