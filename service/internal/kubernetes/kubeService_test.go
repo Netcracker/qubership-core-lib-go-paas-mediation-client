@@ -196,7 +196,6 @@ func testGetResourceListWithLabelsAndAnnotations(t *testing.T, resType string) {
 		r.True(So(err, ShouldBeNil))
 		r.Equal(1, len(foundResources), "expect 1 service to be found")
 		r.Equal(foundResources[0].Name, resourceName1, "invalid service name")
-		// todo add tests with kubeClient.client.System.Type
 		//Broke client and test cache
 		kubeClient.client = badClientset
 		ok, err := resourcesCache.Services.Set(ctx, *entity.NewService(resource1.(*v1.Service)))
