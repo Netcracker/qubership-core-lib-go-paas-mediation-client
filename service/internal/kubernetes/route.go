@@ -362,12 +362,8 @@ func (kube *Kubernetes) upsertExtensionsV1Ingress(ctx context.Context, route *en
 	return routeResourceResult{route: routeFromIngress, status: routeStatusUpdated}
 }
 
-func (kube *Kubernetes) readRoutesFromGatewayAPI() bool {
-	return kube.GatewaySystem.IsGatewayAPIEnabled()
-}
-
 func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, namespace string) (*entity.Route, error) {
-	if kube.readRoutesFromGatewayAPI() {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		httpRoute, err := GetWrapper(ctx, resourceName, namespace, kube.getGatewayV1Client().HTTPRoutes(namespace).Get,
 			kube.Cache.HTTPRoute, entity.WrapHTTPRoute)
 		if err != nil || httpRoute == nil {
@@ -499,7 +495,7 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 }
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
-	if kube.readRoutesFromGatewayAPI() {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		httpRoutes, err := ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, kube.Cache.HTTPRoute,
 			func(listObj *gatewayv1.HTTPRouteList) (result []entity.HttpRoute) {
 				for _, item := range listObj.Items {
@@ -572,14 +568,14 @@ func (kube *Kubernetes) GetGrpcRouteList(ctx context.Context, namespace string, 
 }
 
 func (kube *Kubernetes) GetBadRouteLists(ctx context.Context) (map[string][]string, error) {
-	if kube.readRoutesFromGatewayAPI() {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		return map[string][]string{}, nil
 	}
 	return kube.BadResources.Routes.ToSliceMap(), nil
 }
 
 func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
-	if kube.readRoutesFromGatewayAPI() {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		return kube.WatchGatewayHTTPRoutes(ctx, namespace, metaFilter)
 	}
 	if kube.UseNetworkingV1Ingress {
