@@ -43,6 +43,7 @@ const (
 
 const (
 	dualModeRouteUpdateHint = " - try using Update endpoint"
+	dualModeStatusFormat    = "%s, %s"
 	routeStatusCreated      = "created"
 	routeStatusUpdated      = "updated"
 )
@@ -134,14 +135,14 @@ func pickDualModeRouteResult(ingressRes, httpRouteRes routeResourceResult) *enti
 }
 
 func formatDualModeRouteStatus(httpRouteRes, ingressRes routeResourceResult) string {
-	return fmt.Sprintf("%s, %s",
+	return fmt.Sprintf(dualModeStatusFormat,
 		formatRouteResourceStatus("httproute", httpRouteRes),
 		formatRouteResourceStatus("ingress", ingressRes),
 	)
 }
 
 func formatDualModeRouteStatusSummary(httpRouteRes, ingressRes routeResourceResult) string {
-	return fmt.Sprintf("%s, %s",
+	return fmt.Sprintf(dualModeStatusFormat,
 		formatRouteResourceStatusSummary("httproute", httpRouteRes),
 		formatRouteResourceStatusSummary("ingress", ingressRes),
 	)
@@ -166,7 +167,7 @@ func isDeleteFailure(err error) bool {
 }
 
 func formatDualModeDeleteRouteStatus(httpRouteErr, ingressErr error) string {
-	return fmt.Sprintf("%s, %s",
+	return fmt.Sprintf(dualModeStatusFormat,
 		routeResourceDeleteStatus("httproute", httpRouteErr),
 		routeResourceDeleteStatus("ingress", ingressErr),
 	)
