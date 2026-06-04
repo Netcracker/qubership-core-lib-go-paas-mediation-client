@@ -117,7 +117,7 @@ func dualModeRouteError(httpRouteRes, ingressRes routeResourceResult) error {
 	}
 
 	failedErr := cmp.Or(httpRouteRes.err, ingressRes.err)
-	status := formatDualModeRouteStatus(httpRouteRes, ingressRes)
+	status := formatDualModeRouteStatusSummary(httpRouteRes, ingressRes)
 	return fmt.Errorf("%s%s: %w", status, dualModeRouteUpdateHint, failedErr)
 }
 
@@ -140,9 +140,23 @@ func formatDualModeRouteStatus(httpRouteRes, ingressRes routeResourceResult) str
 	)
 }
 
+func formatDualModeRouteStatusSummary(httpRouteRes, ingressRes routeResourceResult) string {
+	return fmt.Sprintf("%s, %s",
+		formatRouteResourceStatusSummary("httproute", httpRouteRes),
+		formatRouteResourceStatusSummary("ingress", ingressRes),
+	)
+}
+
 func formatRouteResourceStatus(name string, res routeResourceResult) string {
 	if res.err != nil {
 		return fmt.Sprintf("%s: error: %v", name, res.err)
+	}
+	return fmt.Sprintf("%s: %s", name, res.status)
+}
+
+func formatRouteResourceStatusSummary(name string, res routeResourceResult) string {
+	if res.err != nil {
+		return fmt.Sprintf("%s: error", name)
 	}
 	return fmt.Sprintf("%s: %s", name, res.status)
 }
