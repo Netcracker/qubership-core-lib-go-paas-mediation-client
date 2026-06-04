@@ -366,9 +366,18 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		httpRoute, err := GetWrapper(ctx, resourceName, namespace, kube.getGatewayV1Client().HTTPRoutes(namespace).Get,
 			kube.Cache.HTTPRoute, entity.WrapHTTPRoute)
-		if err != nil || httpRoute == nil {
+		if err != nil {
 			return nil, err
 		}
+
+		if httpRoute == nil {
+			return nil, fmt.Errorf("HTTPRoute %s not found in namespace %s", resourceName, namespace)
+		}
+
+		if httpRoute.HTTPRoute == nil {
+			return nil, fmt.Errorf("HTTPRoute %s has nil underlying object in namespace %s", resourceName, namespace)
+		}
+
 		return entity.RouteFromHTTPRoute(httpRoute.HTTPRoute), nil
 	}
 	if kube.UseNetworkingV1Ingress {
