@@ -112,16 +112,13 @@ func dualModeRouteError(httpRouteRes, ingressRes routeResourceResult) error {
 		return nil
 	}
 
-	if httpRouteRes.err == nil || ingressRes.err == nil {
-		return fmt.Errorf(
-			"%s%s: %w",
-			formatDualModeRouteStatus(httpRouteRes, ingressRes),
-			dualModeRouteUpdateHint,
-			cmp.Or(httpRouteRes.err, ingressRes.err),
-		)
+	if httpRouteRes.err != nil && ingressRes.err != nil {
+		return fmt.Errorf("httproute: error: %w, ingress: error: %w", httpRouteRes.err, ingressRes.err)
 	}
 
-	return fmt.Errorf("httproute: error: %w, ingress: error: %w", httpRouteRes.err, ingressRes.err)
+	failedErr := cmp.Or(httpRouteRes.err, ingressRes.err)
+	status := formatDualModeRouteStatus(httpRouteRes, ingressRes)
+	return fmt.Errorf("%s%s: %w", status, dualModeRouteUpdateHint, failedErr)
 }
 
 func finishRouteOperation(route *entity.Route, status string) (*entity.Route, error) {
