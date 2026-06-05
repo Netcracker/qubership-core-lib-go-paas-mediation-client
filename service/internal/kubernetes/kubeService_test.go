@@ -269,12 +269,15 @@ func testGetRouteListWithLabelsAndAnnotationsByGatewayType(t *testing.T) {
 	t.Run(GatewayApiDefault, func(t *testing.T) {
 		testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t, GatewayApiDefault)
 	})
+	t.Run(GatewayApiDefault+"-empty-list-without-httproutes", func(t *testing.T) {
+		testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t, GatewayApiDefault)
+	})
 	for _, gatewaySystemType := range []string{
 		LegacyIngress + "," + GatewayApiDefault,
 		GatewayApiDefault + "," + LegacyIngress,
 	} {
 		t.Run(gatewaySystemType, func(t *testing.T) {
-			testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t, gatewaySystemType)
+			testGetRouteListWithLabelsAndAnnotationsGatewayAPI_DualModeIgnoresIngress(t, gatewaySystemType)
 		})
 		t.Run(gatewaySystemType+"-empty-list-without-httproutes", func(t *testing.T) {
 			testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t, gatewaySystemType)
@@ -303,7 +306,7 @@ func testGetRouteListWithLabelsAndAnnotationsLegacyIngress(t *testing.T) {
 
 	clientset := fake.NewClientset(resource1, resource2)
 	kubeClient := &Kubernetes{
-		client:        &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: &certClient.Clientset{}},
+		client:        newBuildTestKubernetesAPI(clientset, gatewayclientfake.NewSimpleClientset()),
 		WatchExecutor: testWatchExecutor,
 		namespace:     testNamespace1,
 		Cache:         cache.NewTestResourcesCache(),
@@ -347,11 +350,8 @@ func testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t *testing.T, gatewaySys
 	resourceName2 := "test-resource-2"
 	httpRoute2 := createTestHTTPRoute(resourceName2, testNamespace1, nil, resourceAnnotationMap2)
 
-	ingress1 := createTestRoute(resourceName1, testNamespace1, nil, resourceAnnotationMap1)
-	ingress2 := createTestRoute(resourceName2, testNamespace1, nil, resourceAnnotationMap2)
-
-	kubeClientSet := fake.NewClientset(ingress1, ingress2)
 	gwClient := gatewayclientfake.NewSimpleClientset(httpRoute1, httpRoute2)
+	kubeClientSet := fake.NewClientset()
 	kubeClient := &Kubernetes{
 		client:        newBuildTestKubernetesAPI(kubeClientSet, gwClient),
 		WatchExecutor: testWatchExecutor,
@@ -384,16 +384,77 @@ func testGetRouteListWithLabelsAndAnnotationsGatewayAPI(t *testing.T, gatewaySys
 	r.Equal(resourceName1, foundResourceInCache.Name)
 }
 
-func testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t *testing.T, gatewaySystemType string) {
+func testGetRouteListWithLabelsAndAnnotationsGatewayAPI_DualModeIgnoresIngress(t *testing.T, gatewaySystemType string) {
 	r := require.New(t)
 	gatewaySystem := GatewaySystem{Type: gatewaySystemType}
 	r.True(gatewaySystem.IsGatewayAPIEnabled())
 	r.True(gatewaySystem.IsIngressEnabled())
 	ctx := context.Background()
+	testWatchExecutor := newFakeWatchExecutor()
 
-	ingress1 := createTestRoute("test-resource-1", testNamespace1, nil, map[string]string{annotationKey1: annotationValue1})
+	annotationMap := map[string]string{annotationKey1: annotationValue1, annotationKey2: annotationValue2}
+	httpRouteName := "httproute-resource-1"
+	ingressName := "ingress-resource-1"
+
+	httpRoute1 := createTestHTTPRoute(httpRouteName, testNamespace1, nil, annotationMap)
+	httpRoute2 := createTestHTTPRoute("httproute-resource-2", testNamespace1, nil, map[string]string{
+		annotationKey2: annotationValue2,
+		annotationKey3: annotationValue3,
+	})
+	ingress1 := createTestRoute(ingressName, testNamespace1, nil, annotationMap)
+	ingress2 := createTestRoute("ingress-resource-2", testNamespace1, nil, map[string]string{
+		annotationKey2: annotationValue2,
+		annotationKey3: annotationValue3,
+	})
+
 	kubeClient := &Kubernetes{
-		client:        newBuildTestKubernetesAPI(fake.NewClientset(ingress1), gatewayclientfake.NewSimpleClientset()),
+		client: newBuildTestKubernetesAPI(
+			fake.NewClientset(ingress1, ingress2),
+			gatewayclientfake.NewSimpleClientset(httpRoute1, httpRoute2),
+		),
+		WatchExecutor: testWatchExecutor,
+		namespace:     testNamespace1,
+		Cache:         cache.NewTestResourcesCache(cache.HttpRouteCache),
+		BadResources:  &BadResources{Routes: NewBadRoutes()},
+		GatewaySystem: gatewaySystem,
+	}
+
+	foundResources, err := kubeClient.GetRouteList(ctx, testNamespace1, filter.Meta{Annotations: annotationMap})
+	r.NoError(err)
+	r.Len(foundResources, 1)
+	r.Equal(httpRouteName, foundResources[0].Name, "dual-mode must return HTTPRoute, not Ingress with name %q", ingressName)
+
+	badRoutes, err := kubeClient.GetBadRouteLists(ctx)
+	r.NoError(err)
+	r.Empty(badRoutes)
+
+	gwClientForCache := gatewayclientfake.NewSimpleClientset()
+	gwClientForCache.PrependReactor("get", "httproutes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("error test")
+	})
+	kubeClient.client = newBuildTestKubernetesAPI(fake.NewClientset(ingress1, ingress2), gwClientForCache)
+	ok, err := kubeClient.Cache.HTTPRoute.Set(ctx, *entity.WrapHTTPRoute(httpRoute1))
+	r.True(ok)
+	r.NoError(err)
+	foundResourceInCache, err := kubeClient.GetRoute(ctx, httpRouteName, testNamespace1)
+	r.NoError(err)
+	r.Equal(httpRouteName, foundResourceInCache.Name)
+}
+
+func testGetRouteListWithLabelsAndAnnotationsGatewayAPI_EmptyWhenNoHTTPRoutes(t *testing.T, gatewaySystemType string) {
+	r := require.New(t)
+	gatewaySystem := GatewaySystem{Type: gatewaySystemType}
+	r.True(gatewaySystem.IsGatewayAPIEnabled(),
+		"GetRouteList must read HTTPRoutes when GATEWAY_SYSTEM_TYPE contains %q", GatewayApiDefault)
+	ctx := context.Background()
+
+	var k8sObjects []runtime.Object
+	if gatewaySystem.IsIngressEnabled() {
+		ingress1 := createTestRoute("test-resource-1", testNamespace1, nil, map[string]string{annotationKey1: annotationValue1})
+		k8sObjects = append(k8sObjects, ingress1)
+	}
+	kubeClient := &Kubernetes{
+		client:        newBuildTestKubernetesAPI(fake.NewClientset(k8sObjects...), gatewayclientfake.NewSimpleClientset()),
 		namespace:     testNamespace1,
 		Cache:         cache.NewTestResourcesCache(),
 		BadResources:  &BadResources{Routes: NewBadRoutes()},
