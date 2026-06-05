@@ -506,26 +506,16 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
-		httpRoutes, err := ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, kube.Cache.HTTPRoute,
-			func(listObj *gatewayv1.HTTPRouteList) (result []entity.HttpRoute) {
+		return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, nil,
+			func(listObj *gatewayv1.HTTPRouteList) (result []entity.Route) {
 				for _, item := range listObj.Items {
-					route := entity.WrapHTTPRoute(&item)
+					route := entity.RouteFromHTTPRoute(&item)
 					if route != nil {
 						result = append(result, *route)
 					}
 				}
 				return
 			})
-		if err != nil {
-			return nil, err
-		}
-		routes := make([]entity.Route, 0, len(httpRoutes))
-		for i := range httpRoutes {
-			if route := entity.RouteFromHTTPRoute(httpRoutes[i].HTTPRoute); route != nil {
-				routes = append(routes, *route)
-			}
-		}
-		return routes, nil
 	}
 	if kube.UseNetworkingV1Ingress {
 		return ListWrapper(ctx, filter, kube.getNetworkingV1Client().Ingresses(namespace).List, kube.Cache.Ingresses,
