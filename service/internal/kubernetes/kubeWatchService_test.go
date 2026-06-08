@@ -60,6 +60,7 @@ func TestWatchRoutesAddedEvent(t *testing.T) {
 	clientset := &kubernetes.Clientset{}
 	cert_client := &certClient.Clientset{}
 	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: "test-ns",
+		GatewaySystem: GatewaySystem{Type: LegacyIngress},
 		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
@@ -84,6 +85,7 @@ func TestWatchRoutesAddedEventUseNetworkingV1(t *testing.T) {
 	clientset := &kubernetes.Clientset{}
 	cert_client := &certClient.Clientset{}
 	kubeClient := &Kubernetes{client: &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client}, WatchExecutor: fakeWatchExecutor, namespace: "test-ns",
+		GatewaySystem: GatewaySystem{Type: LegacyIngress},
 		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
@@ -102,6 +104,71 @@ func TestWatchRoutesAddedEventUseNetworkingV1(t *testing.T) {
 			break
 		}
 	})
+}
+
+func TestWatchRoutes_GatewayApiDefault_UsesHTTPRoute(t *testing.T) {
+	testWatchRoutesUsesHTTPRoute(t, GatewayApiDefault)
+}
+
+func TestWatchRoutes_DualMode_UsesHTTPRoute(t *testing.T) {
+	testWatchRoutesUsesHTTPRoute(t, LegacyIngress+","+GatewayApiDefault)
+}
+
+func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
+	r := require.New(t)
+	fakeWatchExecutor := newFakeWatchExecutor()
+	clientset := &kubernetes.Clientset{}
+	cert_client := &certClient.Clientset{}
+	kubeClient := &Kubernetes{
+		client:        &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client},
+		WatchExecutor: fakeWatchExecutor,
+		namespace:     testNamespace1,
+		GatewaySystem: GatewaySystem{Type: gatewaySystemType},
+		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
+			clientset.CoreV1().RESTClient(),
+			cert_client.CertmanagerV1().RESTClient(),
+			clientset.NetworkingV1().RESTClient(),
+			clientset.ExtensionsV1beta1().RESTClient()),
+		Cache: cache.NewTestResourcesCache(),
+	}
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+
+	watchHandler, err := kubeClient.WatchRoutes(context.Background(), testNamespace1, filter.Meta{})
+	r.NoError(err)
+	r.Equal(types.HTTPRoutes.String(), fakeWatchExecutor.requestedResources)
+
+	verifyWatchHandler(r, func() {
+		httpRoute := createHttpRoute("test-http-route", 1, "1")
+		go fakeWatchExecutor.fakeWatcher.Add(httpRoute)
+		for watchEvent := range watchHandler.Channel {
+			r.Equal("ADDED", watchEvent.Type)
+			expected := entity.WrapHTTPRoute(httpRoute)
+			r.True(So(watchEvent.Object, ShouldResemble, expected))
+			break
+		}
+	})
+}
+
+func TestWatchRoutes_GatewayApiDefault_HTTPRouteNotSupported(t *testing.T) {
+	r := require.New(t)
+	fakeWatchExecutor := newFakeWatchExecutor()
+	clientset := &kubernetes.Clientset{}
+	cert_client := &certClient.Clientset{}
+	kubeClient := &Kubernetes{
+		client:        &backend.KubernetesApi{KubernetesInterface: clientset, CertmanagerInterface: cert_client},
+		WatchExecutor: fakeWatchExecutor,
+		namespace:     testNamespace1,
+		GatewaySystem: GatewaySystem{Type: GatewayApiDefault},
+		WatchHandlers: NewSharedWatchEventHandlers(fakeWatchExecutor, time.Second,
+			clientset.CoreV1().RESTClient(),
+			cert_client.CertmanagerV1().RESTClient(),
+			clientset.NetworkingV1().RESTClient(),
+			clientset.ExtensionsV1beta1().RESTClient()),
+		Cache: cache.NewTestResourcesCache(),
+	}
+
+	_, err := kubeClient.WatchRoutes(context.Background(), testNamespace1, filter.Meta{})
+	r.EqualError(err, "k8s HTTPRoute is not supported")
 }
 
 //func TestWatchRoutesBadAddedEvent(t *testing.T) {

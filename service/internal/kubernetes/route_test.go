@@ -262,7 +262,7 @@ func Test_UpdateOrCreateRoute_Update_Success(t *testing.T) {
 	assertions.Equal(ingress.Spec.IngressClassName, route.Spec.IngressClassName)
 }
 
-func Test_GetRoute_Success(t *testing.T) {
+func Test_GetRoute_LegacyIngress_ReadsIngress(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
 
@@ -285,6 +285,7 @@ func Test_GetRoute_Success(t *testing.T) {
 	kubeClientSet := fake.NewClientset(&ingress)
 	cert_client := &certClient.Clientset{}
 	kubeClient, _ := NewTestKubernetesClient(testNamespace1, &backend.KubernetesApi{KubernetesInterface: kubeClientSet, CertmanagerInterface: cert_client})
+	kubeClient.GatewaySystem.Type = LegacyIngress
 
 	kubeClient.Cache = cache.NewTestResourcesCache()
 	ok, err := kubeClient.Cache.Ingresses.Set(ctx, *entity.RouteFromIngress(&ingress))
@@ -297,6 +298,73 @@ func Test_GetRoute_Success(t *testing.T) {
 	assertions.Equal(testIngress, route.Name)
 }
 
+func Test_GetRoute_GatewayApiDefault_ReadsHTTPRoute(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	httpRoute := dualModeTestRoute().ToHTTPRoute("gateway-system", "default-external-gateway")
+	kubeClientSet := fake.NewClientset()
+	gwClient := gatewayclientfake.NewSimpleClientset(httpRoute)
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  kubeClientSet,
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+		}).
+		WithGatewaySystemType(GatewayApiDefault).
+		Build()
+	assertions.NoError(err)
+
+	route, err := kubeClient.GetRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+	assertions.NotNil(route)
+	assertions.Equal(httpRoute.Name, route.Name)
+}
+
+func Test_GetRoute_DualMode_IgnoresIngress(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+
+	httpRoute := dualModeTestRoute().ToHTTPRoute("gateway-system", "default-external-gateway")
+	ingress := GetIngress(map[string]any{
+		"metadata": map[string]string{
+			"name":      testIngress,
+			"namespace": testNamespace1,
+		},
+		"spec": map[string]any{
+			"rules": []map[string]any{{
+				"host": "legacy-only.example.com",
+				"http": map[string]any{
+					"paths": []map[string]any{{
+						"path": "legacy-path",
+						"backend": map[string]any{
+							"serviceName": "legacy-service",
+							"servicePort": "9090",
+						},
+					}},
+				},
+			}},
+		},
+	})
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  fake.NewClientset(&ingress),
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gatewayclientfake.NewSimpleClientset(httpRoute),
+		}).
+		WithGatewaySystemType(LegacyIngress + "," + GatewayApiDefault).
+		Build()
+	assertions.NoError(err)
+
+	route, err := kubeClient.GetRoute(ctx, testIngress, testNamespace1)
+	assertions.NoError(err)
+	assertions.NotNil(route)
+	expected := entity.RouteFromHTTPRoute(httpRoute)
+	assertions.Equal(expected.Spec.Host, route.Spec.Host)
+	assertions.NotEqual("legacy-only.example.com", route.Spec.Host)
+}
 func Test_GetRouteFromCache_UseNetworkingV1Ingress_Success(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
