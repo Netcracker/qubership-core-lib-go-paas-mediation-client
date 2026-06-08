@@ -7,6 +7,31 @@
 
 Golang implementation of paas agnostic access to the resources of Openshift/Kubernetes
 
+---
+
+> ## IMPORTANT: Route read operations in dual mode (`GATEWAY_SYSTEM_TYPE`)
+>
+> When `GATEWAY_SYSTEM_TYPE` contains `gateway-api-default` — **including dual mode**
+> (`legacy-ingress,gateway-api-default` or `gateway-api-default,legacy-ingress`) —
+> the following **read** operations behave exactly as if only Gateway API (HTTPRoute) mode were enabled:
+>
+> | Operation | Read source |
+> |-----------|-------------|
+> | `GetRoute` | `HTTPRoute` only (not Ingress) |
+> | `GetRouteList` | `HTTPRoute` only (not Ingress) |
+> | `WatchRoutes` | `HTTPRoute` watch only (not Ingress) |
+> | `GetBadRouteLists` | empty list (Ingress bad-route tracking is not used in this mode) |
+>
+> The response format is unchanged: clients still receive `entity.Route`.
+>
+> **Write operations are not affected by this rule.** In dual mode, `CreateRoute`, `UpdateRoute`, and
+> `DeleteRoute` still operate on **both** HTTPRoute and Ingress when both values are present in
+> `GATEWAY_SYSTEM_TYPE`.
+>
+> Configure `GATEWAY_SYSTEM_TYPE` via the `gateway.system.type` property when building the client.
+
+---
+
 <!-- TOC -->
       * [Supported operations:](#supported-operations)
       * [Usage:](#usage)

@@ -363,6 +363,23 @@ func (kube *Kubernetes) upsertExtensionsV1Ingress(ctx context.Context, route *en
 }
 
 func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, namespace string) (*entity.Route, error) {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		httpRoute, err := GetWrapper(ctx, resourceName, namespace, kube.getGatewayV1Client().HTTPRoutes(namespace).Get,
+			kube.Cache.HTTPRoute, entity.WrapHTTPRoute)
+		if err != nil {
+			return nil, err
+		}
+
+		if httpRoute == nil {
+			return nil, fmt.Errorf("HTTPRoute %s not found in namespace %s", resourceName, namespace)
+		}
+
+		if httpRoute.HTTPRoute == nil {
+			return nil, fmt.Errorf("HTTPRoute %s has nil underlying object in namespace %s", resourceName, namespace)
+		}
+
+		return entity.RouteFromHTTPRoute(httpRoute.HTTPRoute), nil
+	}
 	if kube.UseNetworkingV1Ingress {
 		return GetWrapper(ctx, resourceName, namespace, kube.getNetworkingV1Client().Ingresses(namespace).Get,
 			kube.Cache.Ingresses, entity.RouteFromIngressNetworkingV1)
@@ -488,6 +505,18 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 }
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, nil,
+			func(listObj *gatewayv1.HTTPRouteList) (result []entity.Route) {
+				for _, item := range listObj.Items {
+					route := entity.RouteFromHTTPRoute(&item)
+					if route != nil {
+						result = append(result, *route)
+					}
+				}
+				return
+			})
+	}
 	if kube.UseNetworkingV1Ingress {
 		return ListWrapper(ctx, filter, kube.getNetworkingV1Client().Ingresses(namespace).List, kube.Cache.Ingresses,
 			func(listObj *networkingV1.IngressList) (result []entity.Route) {
@@ -540,15 +569,20 @@ func (kube *Kubernetes) GetGrpcRouteList(ctx context.Context, namespace string, 
 }
 
 func (kube *Kubernetes) GetBadRouteLists(ctx context.Context) (map[string][]string, error) {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		return map[string][]string{}, nil
+	}
 	return kube.BadResources.Routes.ToSliceMap(), nil
 }
 
 func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
+	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		return kube.WatchGatewayHTTPRoutes(ctx, namespace, metaFilter)
+	}
 	if kube.UseNetworkingV1Ingress {
 		return kube.WatchHandlers.IngressesNetworkingV1.Watch(ctx, namespace, metaFilter)
-	} else {
-		return kube.WatchHandlers.IngressesV1Beta1.Watch(ctx, namespace, metaFilter)
 	}
+	return kube.WatchHandlers.IngressesV1Beta1.Watch(ctx, namespace, metaFilter)
 }
 
 func (kube *Kubernetes) WatchGatewayHTTPRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
