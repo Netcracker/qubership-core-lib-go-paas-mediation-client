@@ -1,6 +1,6 @@
 module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/cert-manager/cert-manager v1.20.2
