@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -42,6 +43,7 @@ const (
 
 const (
 	dualModeRouteUpdateHint = " - try using Update endpoint"
+	dualModeStatusFormat    = "%s, %s"
 	routeStatusCreated      = "created"
 	routeStatusUpdated      = "updated"
 )
@@ -90,12 +92,7 @@ func resolveRouteResult(
 			return finishRouteOperation(pickDualModeRouteResult(ingressRes, httpRouteRes), formatDualModeRouteStatus(httpRouteRes, ingressRes))
 		}
 
-		status := formatDualModeRouteStatus(httpRouteRes, ingressRes)
-		if httpRouteRes.err == nil || ingressRes.err == nil {
-			return nil, paasErrors.NewInternalError(fmt.Errorf("%s%s", status, dualModeRouteUpdateHint))
-		}
-
-		return nil, paasErrors.NewInternalError(fmt.Errorf("%s", status))
+		return nil, dualModeRouteError(httpRouteRes, ingressRes)
 	}
 
 	if useGatewayAPI {
@@ -106,9 +103,23 @@ func resolveRouteResult(
 	}
 
 	if ingressRes.err != nil {
-		return nil, ingressRes.err
+		return nil, fmt.Errorf("ingress: error: %w", ingressRes.err)
 	}
 	return finishRouteOperation(ingressRes.route, formatRouteResourceStatus("ingress", ingressRes))
+}
+
+func dualModeRouteError(httpRouteRes, ingressRes routeResourceResult) error {
+	if httpRouteRes.err == nil && ingressRes.err == nil {
+		return nil
+	}
+
+	if httpRouteRes.err != nil && ingressRes.err != nil {
+		return fmt.Errorf("httproute: error: %w, ingress: error: %w", httpRouteRes.err, ingressRes.err)
+	}
+
+	failedErr := cmp.Or(httpRouteRes.err, ingressRes.err)
+	status := formatDualModeRouteStatusSummary(httpRouteRes, ingressRes)
+	return fmt.Errorf("%s%s: %w", status, dualModeRouteUpdateHint, failedErr)
 }
 
 func finishRouteOperation(route *entity.Route, status string) (*entity.Route, error) {
@@ -124,9 +135,16 @@ func pickDualModeRouteResult(ingressRes, httpRouteRes routeResourceResult) *enti
 }
 
 func formatDualModeRouteStatus(httpRouteRes, ingressRes routeResourceResult) string {
-	return fmt.Sprintf("%s, %s",
+	return fmt.Sprintf(dualModeStatusFormat,
 		formatRouteResourceStatus("httproute", httpRouteRes),
 		formatRouteResourceStatus("ingress", ingressRes),
+	)
+}
+
+func formatDualModeRouteStatusSummary(httpRouteRes, ingressRes routeResourceResult) string {
+	return fmt.Sprintf(dualModeStatusFormat,
+		formatRouteResourceStatusSummary("httproute", httpRouteRes),
+		formatRouteResourceStatusSummary("ingress", ingressRes),
 	)
 }
 
@@ -137,12 +155,19 @@ func formatRouteResourceStatus(name string, res routeResourceResult) string {
 	return fmt.Sprintf("%s: %s", name, res.status)
 }
 
+func formatRouteResourceStatusSummary(name string, res routeResourceResult) string {
+	if res.err != nil {
+		return fmt.Sprintf("%s: error", name)
+	}
+	return fmt.Sprintf("%s: %s", name, res.status)
+}
+
 func isDeleteFailure(err error) bool {
 	return err != nil && !paasErrors.IsNotFound(err)
 }
 
 func formatDualModeDeleteRouteStatus(httpRouteErr, ingressErr error) string {
-	return fmt.Sprintf("%s, %s",
+	return fmt.Sprintf(dualModeStatusFormat,
 		routeResourceDeleteStatus("httproute", httpRouteErr),
 		routeResourceDeleteStatus("ingress", ingressErr),
 	)
@@ -380,7 +405,7 @@ func resolveDeleteRouteResult(
 
 		if isDeleteFailure(httpRouteErr) || isDeleteFailure(ingressErr) {
 			logger.Error(RouteDeleteFailed, status)
-			return paasErrors.NewInternalError(fmt.Errorf("%s", status))
+			return dualModeDeleteError(httpRouteErr, ingressErr)
 		}
 
 		logger.Info("Route delete completed: %s", status)
@@ -406,10 +431,23 @@ func resolveSingleResourceDeleteResult(resourceName string, err error) error {
 	}
 	if isDeleteFailure(err) {
 		logger.Error(RouteDeleteFailed, status)
-		return paasErrors.NewInternalError(fmt.Errorf("%s", status))
+		return fmt.Errorf("%s: error: %w", resourceName, err)
 	}
 	logger.Warn(RouteDeleteFailed, status)
 	return err
+}
+
+func dualModeDeleteError(httpRouteErr, ingressErr error) error {
+	httpFailed := isDeleteFailure(httpRouteErr)
+	ingressFailed := isDeleteFailure(ingressErr)
+
+	if httpFailed && ingressFailed {
+		return fmt.Errorf("httproute: error: %w, ingress: error: %w", httpRouteErr, ingressErr)
+	}
+	if httpFailed {
+		return fmt.Errorf("httproute: error: %w", httpRouteErr)
+	}
+	return fmt.Errorf("ingress: error: %w", ingressErr)
 }
 
 func newRouteDeleteNotFoundError(routeName, status string) error {
