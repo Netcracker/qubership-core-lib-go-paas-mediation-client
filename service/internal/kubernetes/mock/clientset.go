@@ -21,8 +21,6 @@ import (
 	authorizationv1beta1 "k8s.io/client-go/kubernetes/typed/authorization/v1beta1"
 	autoscalingv1 "k8s.io/client-go/kubernetes/typed/autoscaling/v1"
 	autoscalingv2 "k8s.io/client-go/kubernetes/typed/autoscaling/v2"
-	autoscalingv2beta1 "k8s.io/client-go/kubernetes/typed/autoscaling/v2beta1"
-	autoscalingv2beta2 "k8s.io/client-go/kubernetes/typed/autoscaling/v2beta2"
 	batchv1 "k8s.io/client-go/kubernetes/typed/batch/v1"
 	batchv1beta1 "k8s.io/client-go/kubernetes/typed/batch/v1beta1"
 	certificatesv1 "k8s.io/client-go/kubernetes/typed/certificates/v1"
@@ -56,7 +54,7 @@ import (
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta1"
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta2"
 	schedulingv1 "k8s.io/client-go/kubernetes/typed/scheduling/v1"
-	schedulingv1alpha1 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha1"
+	schedulingv1alpha2 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha2"
 	schedulingv1beta1 "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1"
 	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 	storagev1alpha1 "k8s.io/client-go/kubernetes/typed/storage/v1alpha1"
@@ -144,12 +142,6 @@ func (c *KubeClientset) AutoscalingV1() autoscalingv1.AutoscalingV1Interface {
 func (c *KubeClientset) AutoscalingV2() autoscalingv2.AutoscalingV2Interface {
 	panic("not implemented")
 }
-func (c *KubeClientset) AutoscalingV2beta1() autoscalingv2beta1.AutoscalingV2beta1Interface {
-	panic("not implemented")
-}
-func (c *KubeClientset) AutoscalingV2beta2() autoscalingv2beta2.AutoscalingV2beta2Interface {
-	panic("not implemented")
-}
 func (c *KubeClientset) BatchV1() batchv1.BatchV1Interface                { panic("not implemented") }
 func (c *KubeClientset) BatchV1beta1() batchv1beta1.BatchV1beta1Interface { panic("not implemented") }
 func (c *KubeClientset) CertificatesV1() certificatesv1.CertificatesV1Interface {
@@ -202,7 +194,7 @@ func (c *KubeClientset) PolicyV1beta1() policyv1beta1.PolicyV1beta1Interface {
 func (c *KubeClientset) RbacV1() rbacv1.RbacV1Interface                   { panic("not implemented") }
 func (c *KubeClientset) RbacV1beta1() rbacv1beta1.RbacV1beta1Interface    { panic("not implemented") }
 func (c *KubeClientset) RbacV1alpha1() rbacv1alpha1.RbacV1alpha1Interface { panic("not implemented") }
-func (c *KubeClientset) SchedulingV1alpha1() schedulingv1alpha1.SchedulingV1alpha1Interface {
+func (c *KubeClientset) SchedulingV1alpha2() schedulingv1alpha2.SchedulingV1alpha2Interface {
 	panic("not implemented")
 }
 func (c *KubeClientset) SchedulingV1beta1() schedulingv1beta1.SchedulingV1beta1Interface {
