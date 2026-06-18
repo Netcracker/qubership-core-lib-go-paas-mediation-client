@@ -7,9 +7,9 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.6.0
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.6.0
-	github.com/netcracker/qubership-core-lib-go/v3 v3.11.0
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.6.1
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.7.0
+	github.com/netcracker/qubership-core-lib-go/v3 v3.11.1
 	github.com/openshift/api v0.0.0-20260615110019-261e3a0546f3
 	github.com/openshift/client-go v0.0.0-20260603140539-6892dc3e1ffc
 	github.com/smarty/assertions v1.16.0
@@ -60,7 +60,7 @@ require (
 	github.com/knadh/koanf/parsers/yaml v1.0.0 // indirect
 	github.com/knadh/koanf/providers/env v1.1.0 // indirect
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
-	github.com/knadh/koanf/v2 v2.3.4 // indirect
+	github.com/knadh/koanf/v2 v2.3.5 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
