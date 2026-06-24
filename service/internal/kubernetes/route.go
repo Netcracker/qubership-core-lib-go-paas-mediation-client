@@ -577,7 +577,10 @@ func (kube *Kubernetes) GetBadRouteLists(ctx context.Context) (map[string][]stri
 
 func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
-		return kube.WatchGatewayHTTPRoutes(ctx, namespace, metaFilter)
+		if kube.WatchHandlers.HTTPRouteAsRouteV1 == nil {
+			return nil, fmt.Errorf("k8s HTTPRoute is not supported")
+		}
+		return kube.WatchHandlers.HTTPRouteAsRouteV1.Watch(ctx, namespace, metaFilter)
 	}
 	if kube.UseNetworkingV1Ingress {
 		return kube.WatchHandlers.IngressesNetworkingV1.Watch(ctx, namespace, metaFilter)
