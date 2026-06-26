@@ -78,7 +78,6 @@ func (handler *RestWatchEventHandler[F, T]) Watch(ctx context.Context, metaFilte
 	clientResultChannel := make(chan pmWatch.ApiEvent, 1)
 	watchHandler := pmWatch.Handler{Channel: clientResultChannel, StopWatching: cancel}
 	go func(ctx context.Context, watcher watch.Interface, clientResultChannel chan pmWatch.ApiEvent) {
-		defer cancel()
 		apiServerResultChannel := watcher.ResultChan()
 		watchLoopState := Running
 		defer func() {
