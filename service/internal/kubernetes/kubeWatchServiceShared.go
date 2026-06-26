@@ -207,7 +207,6 @@ func (this *sharedNamespaceWatchHandler[F, T]) Watch(ctx context.Context, metaFi
 	var err error
 	this.currentEventHandler, err = provider.Watch(handlerCtx, filter.Meta{WatchBookmark: true})
 	if err != nil {
-		cancelWatching() // Clean up context on error
 		return nil, fmt.Errorf("failed to initiate handler watch handler: %w", err)
 	}
 
