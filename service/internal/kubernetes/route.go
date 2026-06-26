@@ -582,6 +582,7 @@ func convertHTTPRouteToRouteHandler(handler *pmWatch.Handler) *pmWatch.Handler {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		defer cancel()
 		defer close(out)
 		for {
 			select {
