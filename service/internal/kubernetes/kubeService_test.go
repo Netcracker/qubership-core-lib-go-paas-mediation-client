@@ -664,7 +664,6 @@ func Test_BuildSkipsGatewayHTTPRouteWatchHandlersWithoutCache(t *testing.T) {
 		Build()
 	assertions.NoError(err)
 	assertions.Nil(kube.WatchHandlers.HTTPRouteV1)
-	assertions.Nil(kube.WatchHandlers.HTTPRouteAsRouteV1)
 }
 
 func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
@@ -685,7 +684,6 @@ func Test_BuildEnablesGatewayHTTPRouteWatchHandlers(t *testing.T) {
 		Build()
 	assertions.NoError(err)
 	assertions.NotNil(kube.WatchHandlers.HTTPRouteV1)
-	assertions.NotNil(kube.WatchHandlers.HTTPRouteAsRouteV1)
 }
 
 func Test_BuildEnablesGatewayGRPCRouteWatchHandlers(t *testing.T) {

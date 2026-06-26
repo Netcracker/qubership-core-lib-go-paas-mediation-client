@@ -39,7 +39,6 @@ type SharedWatchHandlers struct {
 	IngressesNetworkingV1 *SharedWatchHandler[*networkingV1.Ingress, entity.Route]
 	IngressesV1Beta1      *SharedWatchHandler[*v1beta1.Ingress, entity.Route]
 	HTTPRouteV1           *SharedWatchHandler[*gatewayv1.HTTPRoute, entity.HttpRoute]
-	HTTPRouteAsRouteV1    *SharedWatchHandler[*gatewayv1.HTTPRoute, entity.Route]
 	GRPCRouteV1           *SharedWatchHandler[*gatewayv1.GRPCRoute, entity.GrpcRoute]
 }
 
@@ -142,11 +141,6 @@ func (h *SharedWatchHandlers) WithHTTPRouteV1(executor pmWatch.Executor, clientT
 	h.HTTPRouteV1 = NewSharedWatchEventHandler(types.HTTPRoutes, clientTimeout, func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
 		return newSharedNamespaceWatchHandler(namespace, kind, clientTimeout, func(namespace string, kind types.PaasResourceType) *RestWatchEventHandler[*gatewayv1.HTTPRoute, entity.HttpRoute] {
 			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.WrapHTTPRoute)
-		})
-	})
-	h.HTTPRouteAsRouteV1 = NewSharedWatchEventHandler(types.HTTPRoutes, clientTimeout, func(namespace string, kind types.PaasResourceType) *sharedNamespaceWatchHandler[*gatewayv1.HTTPRoute, entity.Route] {
-		return newSharedNamespaceWatchHandler(namespace, kind, clientTimeout, func(namespace string, kind types.PaasResourceType) *RestWatchEventHandler[*gatewayv1.HTTPRoute, entity.Route] {
-			return NewRestWatchHandler(namespace, kind, gatewayV1, executor, entity.RouteFromHTTPRoute)
 		})
 	})
 }
