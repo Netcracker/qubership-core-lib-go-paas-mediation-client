@@ -575,9 +575,51 @@ func (kube *Kubernetes) GetBadRouteLists(ctx context.Context) (map[string][]stri
 	return kube.BadResources.Routes.ToSliceMap(), nil
 }
 
+// convertHTTPRouteToRouteHandler decorates a Handler that emits *entity.HttpRoute events
+// and converts them to *entity.Route events by unwrapping and converting the underlying HTTPRoute.
+func convertHTTPRouteToRouteHandler(handler *pmWatch.Handler) *pmWatch.Handler {
+	out := make(chan pmWatch.ApiEvent, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		defer cancel()
+		defer close(out)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-handler.Channel:
+				if !ok {
+					return
+				}
+				// Convert entity.HttpRoute -> entity.Route
+				if httpRoute, ok := event.Object.(*entity.HttpRoute); ok && httpRoute != nil {
+					event.Object = entity.RouteFromHTTPRoute(httpRoute.HTTPRoute)
+				}
+				out <- event
+			}
+		}
+	}()
+
+	return &pmWatch.Handler{
+		Channel: out,
+		StopWatching: func() {
+			cancel()
+			handler.StopWatching()
+		},
+	}
+}
+
 func (kube *Kubernetes) WatchRoutes(ctx context.Context, namespace string, metaFilter filter.Meta) (*pmWatch.Handler, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
-		return kube.WatchGatewayHTTPRoutes(ctx, namespace, metaFilter)
+		if kube.WatchHandlers.HTTPRouteV1 == nil {
+			return nil, fmt.Errorf("k8s HTTPRoute is not supported")
+		}
+		handler, err := kube.WatchHandlers.HTTPRouteV1.Watch(ctx, namespace, metaFilter)
+		if err != nil {
+			return nil, err
+		}
+		return convertHTTPRouteToRouteHandler(handler), nil
 	}
 	if kube.UseNetworkingV1Ingress {
 		return kube.WatchHandlers.IngressesNetworkingV1.Watch(ctx, namespace, metaFilter)
