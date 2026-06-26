@@ -14,7 +14,6 @@ import (
 	pmWatch "github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/watch"
 	"github.com/stretchr/testify/require"
 	"k8s.io/api/extensions/v1beta1"
-	networkingV1 "k8s.io/api/networking/v1"
 	v1 "k8s.io/api/networking/v1"
 	paasErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +38,7 @@ func getVariables() (*entity.Route, *cache.ResourcesCache) {
 	return routeToCreate, resourcesCache
 }
 
-func getNetworkingIngress() networkingV1.Ingress {
+func getNetworkingIngress() v1.Ingress {
 	ingressJson := map[string]any{
 		"metadata": map[string]string{
 			"name":            testIngress,
@@ -63,7 +62,7 @@ func getNetworkingIngress() networkingV1.Ingress {
 	if err != nil {
 		panic(err)
 	}
-	var ingress networkingV1.Ingress
+	var ingress v1.Ingress
 	err = json.Unmarshal(marshaledIngress, &ingress)
 	if err != nil {
 		panic(err)
