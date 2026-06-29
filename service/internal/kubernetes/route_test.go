@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/backend"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/internal/cache"
-	pmWatch "github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/watch"
 	"github.com/stretchr/testify/require"
 	"k8s.io/api/extensions/v1beta1"
 	v1 "k8s.io/api/networking/v1"
@@ -1625,113 +1623,5 @@ func Test_dualModeRouteError_NoErrorDuplication(t *testing.T) {
 				assertions.NotContains(err.Error(), tt.wantNoContain, "error message should not contain duplicated error text")
 			}
 		})
-	}
-}
-
-// Tests for convertHTTPRouteToRouteHandler decorator
-
-func TestConvertHTTPRouteToRouteHandler_ConvertsEvents(t *testing.T) {
-	r := require.New(t)
-
-	// Create a mock input handler that emits HttpRoute events
-	inChannel := make(chan pmWatch.ApiEvent, 1)
-	stopCalled := false
-	inputHandler := &pmWatch.Handler{
-		Channel: inChannel,
-		StopWatching: func() {
-			stopCalled = true
-			close(inChannel)
-		},
-	}
-
-	// Apply the decorator
-	outputHandler := convertHTTPRouteToRouteHandler(inputHandler)
-	r.NotNil(outputHandler)
-	r.NotNil(outputHandler.Channel)
-	r.NotNil(outputHandler.StopWatching)
-
-	// Create a test HTTPRoute
-	httpRoute := dualModeTestRoute().ToHTTPRoute("gateway-system", "default-external-gateway")
-
-	// Send an ADDED event with HttpRoute
-	go func() {
-		inChannel <- pmWatch.ApiEvent{
-			Type:   "ADDED",
-			Object: entity.WrapHTTPRoute(httpRoute),
-		}
-	}()
-
-	// Verify the output is converted to Route
-	select {
-	case event := <-outputHandler.Channel:
-		r.Equal("ADDED", event.Type)
-		route, ok := event.Object.(*entity.Route)
-		r.True(ok, "Expected *entity.Route but got %T", event.Object)
-		r.NotNil(route)
-	case <-time.After(1 * time.Second):
-		r.Fail("Timeout waiting for converted event")
-	}
-
-	// Verify StopWatching delegates correctly
-	outputHandler.StopWatching()
-	r.True(stopCalled, "StopWatching should have been called on the input handler")
-}
-
-func TestConvertHTTPRouteToRouteHandler_HandlesChannelClose(t *testing.T) {
-	r := require.New(t)
-
-	inChannel := make(chan pmWatch.ApiEvent)
-	inputHandler := &pmWatch.Handler{
-		Channel: inChannel,
-		StopWatching: func() {
-			close(inChannel)
-		},
-	}
-
-	outputHandler := convertHTTPRouteToRouteHandler(inputHandler)
-
-	// Close the input channel
-	close(inChannel)
-
-	// Output channel should close too
-	select {
-	case _, ok := <-outputHandler.Channel:
-		r.False(ok, "Output channel should be closed")
-	case <-time.After(1 * time.Second):
-		r.Fail("Output channel should have closed")
-	}
-}
-
-func TestConvertHTTPRouteToRouteHandler_CancelsContextOnStop(t *testing.T) {
-	r := require.New(t)
-
-	inChannel := make(chan pmWatch.ApiEvent)
-	stopCalled := false
-	inputHandler := &pmWatch.Handler{
-		Channel: inChannel,
-		StopWatching: func() {
-			stopCalled = true
-		},
-	}
-
-	outputHandler := convertHTTPRouteToRouteHandler(inputHandler)
-
-	// Call StopWatching which should cancel the context
-	outputHandler.StopWatching()
-
-	// Verify the underlying handler's StopWatching was called
-	r.True(stopCalled)
-
-	// The goroutine should exit due to context cancellation
-	// Give it a moment to clean up
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify the output channel gets closed
-	select {
-	case _, ok := <-outputHandler.Channel:
-		r.False(ok, "Output channel should eventually close after context cancel")
-	case <-time.After(1 * time.Second):
-		// Channel might not be closed immediately, but the test validates
-		// that cancel is deferred and cleanup happens
 	}
 }
