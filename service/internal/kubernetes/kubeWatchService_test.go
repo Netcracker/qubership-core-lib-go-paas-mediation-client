@@ -142,7 +142,7 @@ func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 		go fakeWatchExecutor.fakeWatcher.Add(httpRoute)
 		for watchEvent := range watchHandler.Channel {
 			r.Equal("ADDED", watchEvent.Type)
-			expected := entity.WrapHTTPRoute(httpRoute)
+			expected := entity.RouteFromHTTPRoute(httpRoute)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
