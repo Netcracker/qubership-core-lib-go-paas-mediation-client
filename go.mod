@@ -17,9 +17,9 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
-	k8s.io/api v0.36.2
-	k8s.io/apimachinery v0.36.2
-	k8s.io/client-go v0.36.2
+	k8s.io/api v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/client-go v0.36.4
 	sigs.k8s.io/gateway-api v1.6.1
 )
 
