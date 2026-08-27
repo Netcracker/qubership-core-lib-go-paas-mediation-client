@@ -120,7 +120,7 @@ func NewCertificateSpec(cs *v1.CertificateSpec) CertificateSpec {
 	return certificateSpec
 }
 
-func NewIssuerRef(ir cmmeta.ObjectReference) IssuerRef {
+func NewIssuerRef(ir cmmeta.IssuerReference) IssuerRef {
 	return IssuerRef{
 		Name:  ir.Name,
 		Group: ir.Group,
@@ -265,8 +265,8 @@ func (cs *CertificateSpec) ToCertificateSpec() v1.CertificateSpec {
 	return certificateSpec
 }
 
-func (ir *IssuerRef) ToIssuerRef() cmmeta.ObjectReference {
-	return cmmeta.ObjectReference{
+func (ir *IssuerRef) ToIssuerRef() cmmeta.IssuerReference {
+	return cmmeta.IssuerReference{
 		Name:  ir.Name,
 		Kind:  ir.Kind,
 		Group: ir.Group,

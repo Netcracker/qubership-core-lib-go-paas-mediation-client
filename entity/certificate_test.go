@@ -93,7 +93,7 @@ func getV1Certificate() *v1.Certificate {
 		Spec: v1.CertificateSpec{
 			Duration:    &metav1.Duration{Duration: duration},
 			RenewBefore: &metav1.Duration{Duration: renewBefore},
-			IssuerRef:   cmmeta.ObjectReference{},
+			IssuerRef:   cmmeta.IssuerReference{},
 			Usages:      []v1.KeyUsage{"server auth"},
 			PrivateKey:  &v1.CertificatePrivateKey{},
 			Keystores: &v1.CertificateKeystores{
