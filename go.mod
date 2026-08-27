@@ -15,7 +15,7 @@ require (
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/mod v0.38.0
+	golang.org/x/mod v0.40.0
 	golang.org/x/net v0.58.0
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
