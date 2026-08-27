@@ -54,7 +54,9 @@ import (
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta1"
 	"k8s.io/client-go/kubernetes/typed/resource/v1beta2"
 	schedulingv1 "k8s.io/client-go/kubernetes/typed/scheduling/v1"
-	schedulingv1alpha2 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha2"
+	schedulingv1alpha3 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha3"
+	lifecyclev1alpha1 "k8s.io/client-go/kubernetes/typed/lifecycle/v1alpha1"
+	storagemigrationv1 "k8s.io/client-go/kubernetes/typed/storagemigration/v1"
 	schedulingv1beta1 "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1"
 	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 	storagev1alpha1 "k8s.io/client-go/kubernetes/typed/storage/v1alpha1"
@@ -111,7 +113,7 @@ func (c *KubeClientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-func (c *KubeClientset) Discovery() discovery.DiscoveryInterface { return c.discovery }
+func (c *KubeClientset) Discovery() discovery.DiscoveryInterfaces { return c.discovery }
 func (c *KubeClientset) AdmissionregistrationV1() admissionregistrationv1.AdmissionregistrationV1Interface {
 	panic("not implemented")
 }
@@ -194,7 +196,13 @@ func (c *KubeClientset) PolicyV1beta1() policyv1beta1.PolicyV1beta1Interface {
 func (c *KubeClientset) RbacV1() rbacv1.RbacV1Interface                   { panic("not implemented") }
 func (c *KubeClientset) RbacV1beta1() rbacv1beta1.RbacV1beta1Interface    { panic("not implemented") }
 func (c *KubeClientset) RbacV1alpha1() rbacv1alpha1.RbacV1alpha1Interface { panic("not implemented") }
-func (c *KubeClientset) SchedulingV1alpha2() schedulingv1alpha2.SchedulingV1alpha2Interface {
+func (c *KubeClientset) SchedulingV1alpha3() schedulingv1alpha3.SchedulingV1alpha3Interface {
+	panic("not implemented")
+}
+func (c *KubeClientset) LifecycleV1alpha1() lifecyclev1alpha1.LifecycleV1alpha1Interface {
+	panic("not implemented")
+}
+func (c *KubeClientset) StoragemigrationV1() storagemigrationv1.StoragemigrationV1Interface {
 	panic("not implemented")
 }
 func (c *KubeClientset) SchedulingV1beta1() schedulingv1beta1.SchedulingV1beta1Interface {
