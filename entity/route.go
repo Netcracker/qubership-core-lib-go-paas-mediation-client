@@ -34,6 +34,11 @@ const (
 
 var gatewayAPIDuration = regexp.MustCompile(`^([0-9]{1,5}(h|m|s|ms)){1,4}$`)
 
+// IsValidGatewayAPIDuration reports whether value matches Gateway API duration format (GEP-2257).
+func IsValidGatewayAPIDuration(value string) bool {
+	return gatewayAPIDuration.MatchString(value)
+}
+
 type (
 	// todo change to Ingress in next major release AND REWRITE entity to comply with Ingress structure!
 	Route struct {
@@ -293,8 +298,8 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	return httpRoute
 }
 
-func (route Route) ToBackendTrafficPolicy() (*unstructured.Unstructured, error) {
-	streamIdleTimeout, err := resolveStreamIdleTimeout(&route)
+func (route Route) ToBackendTrafficPolicy(defaultIdleTimeout string) (*unstructured.Unstructured, error) {
+	streamIdleTimeout, err := resolveStreamIdleTimeout(&route, defaultIdleTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +477,7 @@ func parseTimeoutSeconds(annotation, value string) int {
 	return sec
 }
 
-func resolveStreamIdleTimeout(route *Route) (string, error) {
+func resolveStreamIdleTimeout(route *Route, defaultIdleTimeout string) (string, error) {
 	// Priority 1: Explicit StreamIdleTimeout field
 	if route.Spec.StreamIdleTimeout != "" {
 		if !gatewayAPIDuration.MatchString(route.Spec.StreamIdleTimeout) {
@@ -481,7 +486,15 @@ func resolveStreamIdleTimeout(route *Route) (string, error) {
 		return route.Spec.StreamIdleTimeout, nil
 	}
 
-	// Priority 2: Legacy annotations
+	// Priority 2: platform/service default (HTTP_ROUTE_REQUEST_IDLE_TIMEOUT)
+	if timeout := strings.TrimSpace(defaultIdleTimeout); timeout != "" {
+		if !gatewayAPIDuration.MatchString(timeout) {
+			return "", fmt.Errorf("default idle timeout %q is not a valid Gateway API duration", timeout)
+		}
+		return timeout, nil
+	}
+
+	// Priority 3: Legacy annotations
 	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
 	if connectTimeout := annotations[AnnotationProxyConnectTimeout]; connectTimeout != "" {
 		logger.Warn("annotation %s=%s is not mapped; Envoy Gateway TCP connect defaults are used",

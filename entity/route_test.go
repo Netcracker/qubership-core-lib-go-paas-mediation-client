@@ -506,7 +506,7 @@ func TestToHTTPRoute_WithTimeouts(t *testing.T) {
 	assert.False(t, hasNginx)
 	assert.Equal(t, "yes", httpRoute.Annotations["platform.example/keep"])
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
@@ -538,7 +538,7 @@ func TestToBackendTrafficPolicy_GrpcWithoutTimeout(t *testing.T) {
 	route.Metadata.Annotations = map[string]string{
 		AnnotationBackendProtocol: "GRPC",
 	}
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -567,7 +567,7 @@ func TestToBackendTrafficPolicy_GrpcWithTimeout(t *testing.T) {
 		AnnotationBackendProtocol:  "GRPC",
 		AnnotationProxyReadTimeout: "1800",
 	}
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -590,7 +590,7 @@ func TestToBackendTrafficPolicy_GrpcWithExplicitTimeout(t *testing.T) {
 	}
 	route.Spec.StreamIdleTimeout = "3600s" // Explicit timeout takes precedence
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -607,7 +607,7 @@ func TestToBackendTrafficPolicy_NonGrpcWithTimeout(t *testing.T) {
 		AnnotationProxyReadTimeout: "900",
 		AnnotationProxySendTimeout: "1800",
 	}
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -626,7 +626,7 @@ func TestToBackendTrafficPolicy_NonGrpcWithExplicitTimeout(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	route.Spec.StreamIdleTimeout = "2h30m"
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -639,7 +639,7 @@ func TestToBackendTrafficPolicy_NonGrpcWithExplicitTimeout(t *testing.T) {
 func TestToBackendTrafficPolicy_NonGrpcWithoutTimeout(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	// No GRPC, no timeout annotations, no explicit timeout
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.Nil(t, policy) // Should return nil - no policy needed
 }
@@ -648,7 +648,7 @@ func TestToBackendTrafficPolicy_InvalidExplicitTimeout(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	route.Spec.StreamIdleTimeout = "invalid-format"
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.Error(t, err)
 	assert.Nil(t, policy)
 	assert.Contains(t, err.Error(), "not a valid Gateway API duration")
@@ -660,7 +660,7 @@ func TestToBackendTrafficPolicy_InvalidLegacyTimeout(t *testing.T) {
 		AnnotationProxyReadTimeout: "100000", // 6 digits → "100000s" exceeds {1,5} per unit
 	}
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.Error(t, err)
 	assert.Nil(t, policy)
 	assert.Contains(t, err.Error(), "not a valid Gateway API duration")
@@ -676,7 +676,7 @@ func TestToBackendTrafficPolicy_LabelsAndMetadata(t *testing.T) {
 	}
 	route.Spec.StreamIdleTimeout = "60s"
 
-	policy, err := route.ToBackendTrafficPolicy()
+	policy, err := route.ToBackendTrafficPolicy("")
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
@@ -697,12 +697,13 @@ func TestToBackendTrafficPolicy_LabelsAndMetadata(t *testing.T) {
 
 func TestResolveStreamIdleTimeout(t *testing.T) {
 	tests := []struct {
-		name              string
-		streamIdleTimeout string
-		annotations       map[string]string
-		expectEmpty       bool
-		expected          string
-		expectError       bool
+		name               string
+		streamIdleTimeout  string
+		defaultIdleTimeout string
+		annotations        map[string]string
+		expectEmpty        bool
+		expected           string
+		expectError        bool
 	}{
 		{
 			name:              "Explicit StreamIdleTimeout takes precedence",
@@ -710,7 +711,21 @@ func TestResolveStreamIdleTimeout(t *testing.T) {
 			annotations: map[string]string{
 				AnnotationProxyReadTimeout: "1800",
 			},
-			expected: "3600s",
+			defaultIdleTimeout: "30m",
+			expected:           "3600s",
+		},
+		{
+			name:               "Default idle timeout beats legacy annotations",
+			defaultIdleTimeout: "45m",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "1800",
+			},
+			expected: "45m",
+		},
+		{
+			name:               "Invalid default idle timeout",
+			defaultIdleTimeout: "not-valid",
+			expectError:        true,
 		},
 		{
 			name:              "Explicit StreamIdleTimeout with complex format",
@@ -801,7 +816,7 @@ func TestResolveStreamIdleTimeout(t *testing.T) {
 					StreamIdleTimeout: tt.streamIdleTimeout,
 				},
 			}
-			timeout, err := resolveStreamIdleTimeout(route)
+			timeout, err := resolveStreamIdleTimeout(route, tt.defaultIdleTimeout)
 			if tt.expectError {
 				assert.Error(t, err)
 				return
@@ -814,6 +829,24 @@ func TestResolveStreamIdleTimeout(t *testing.T) {
 			assert.Equal(t, tt.expected, timeout)
 		})
 	}
+}
+
+func TestIsValidGatewayAPIDuration(t *testing.T) {
+	assert.True(t, IsValidGatewayAPIDuration("1800s"))
+	assert.True(t, IsValidGatewayAPIDuration("1h30m"))
+	assert.False(t, IsValidGatewayAPIDuration("invalid"))
+	assert.False(t, IsValidGatewayAPIDuration("100000s"))
+}
+
+func TestToBackendTrafficPolicy_WithDefaultIdleTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	policy, err := route.ToBackendTrafficPolicy("20m")
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "20m", timeout)
 }
 
 func TestPathMatchTypeFromRoute(t *testing.T) {

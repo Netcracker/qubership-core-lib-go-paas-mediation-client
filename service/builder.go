@@ -32,6 +32,7 @@ type PlatformClientBuilder struct {
 	gatewaySystemType       *string
 	gatewaySystemNamespace  *string
 	gatewaySystemName       *string
+	httpRouteIdleTimeout    *string
 }
 
 func NewPlatformClientBuilder() PlatformClientBuilder {
@@ -170,6 +171,11 @@ func (builder PlatformClientBuilder) WithGatewaySystemNamespace(namespace string
 
 func (builder PlatformClientBuilder) WithGatewaySystemName(name string) PlatformClientBuilder {
 	builder.gatewaySystemName = &name
+	return builder
+}
+
+func (builder PlatformClientBuilder) WithHTTPRouteRequestIdleTimeout(timeout string) PlatformClientBuilder {
+	builder.httpRouteIdleTimeout = &timeout
 	return builder
 }
 
