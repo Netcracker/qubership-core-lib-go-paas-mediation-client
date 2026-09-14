@@ -541,28 +541,208 @@ func TestToBackendTrafficPolicy_GrpcWithoutTimeout(t *testing.T) {
 	policy, err := route.ToBackendTrafficPolicy()
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
+
+	// Verify useClientProtocol is set
 	useClient, found, err := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
 	assert.NoError(t, err)
 	assert.True(t, found)
 	assert.True(t, useClient)
+
+	// Verify targetRefs
+	targetRefs, found, err := unstructured.NestedSlice(policy.Object, "spec", "targetRefs")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Len(t, targetRefs, 1)
+
+	// Verify mergeType
+	mergeType, found, err := unstructured.NestedString(policy.Object, "spec", "mergeType")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "StrategicMerge", mergeType)
+}
+
+func TestToBackendTrafficPolicy_GrpcWithTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationBackendProtocol:  "GRPC",
+		AnnotationProxyReadTimeout: "1800",
+	}
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	// Verify useClientProtocol
+	useClient, _, _ := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
+	assert.True(t, useClient)
+
+	// Verify streamIdleTimeout from legacy annotation
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "1800s", timeout)
+}
+
+func TestToBackendTrafficPolicy_GrpcWithExplicitTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationBackendProtocol:  "GRPC",
+		AnnotationProxyReadTimeout: "900", // Should be ignored
+	}
+	route.Spec.StreamIdleTimeout = "3600s" // Explicit timeout takes precedence
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	// Verify explicit timeout takes precedence
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "3600s", timeout)
+}
+
+func TestToBackendTrafficPolicy_NonGrpcWithTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationProxyReadTimeout: "900",
+		AnnotationProxySendTimeout: "1800",
+	}
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	// useClientProtocol should NOT be present
+	_, found, _ := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
+	assert.False(t, found)
+
+	// Should take max of read and send timeouts
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "1800s", timeout)
+}
+
+func TestToBackendTrafficPolicy_NonGrpcWithExplicitTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Spec.StreamIdleTimeout = "2h30m"
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "2h30m", timeout)
+}
+
+func TestToBackendTrafficPolicy_NonGrpcWithoutTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	// No GRPC, no timeout annotations, no explicit timeout
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.Nil(t, policy) // Should return nil - no policy needed
+}
+
+func TestToBackendTrafficPolicy_InvalidExplicitTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Spec.StreamIdleTimeout = "invalid-format"
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.Error(t, err)
+	assert.Nil(t, policy)
+	assert.Contains(t, err.Error(), "not a valid Gateway API duration")
+}
+
+func TestToBackendTrafficPolicy_InvalidLegacyTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationProxyReadTimeout: "100000", // 6 digits → "100000s" exceeds {1,5} per unit
+	}
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.Error(t, err)
+	assert.Nil(t, policy)
+	assert.Contains(t, err.Error(), "not a valid Gateway API duration")
+}
+
+func TestToBackendTrafficPolicy_LabelsAndMetadata(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Name = "test-route"
+	route.Metadata.Namespace = "test-namespace"
+	route.Metadata.Labels = map[string]string{
+		"app": "test-app",
+		"env": "prod",
+	}
+	route.Spec.StreamIdleTimeout = "60s"
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	// Verify metadata
+	assert.Equal(t, "test-route", policy.GetName())
+	assert.Equal(t, "test-namespace", policy.GetNamespace())
+
+	// Verify labels include both custom and managed-by
+	labels := policy.GetLabels()
+	assert.Equal(t, "test-app", labels["app"])
+	assert.Equal(t, "prod", labels["env"])
+	assert.Equal(t, ManagedByPaasMediation, labels[ManagedByLabel])
+
+	// Verify API version and kind
+	assert.Equal(t, BackendTrafficPolicyAPIVersion, policy.GetAPIVersion())
+	assert.Equal(t, BackendTrafficPolicyKind, policy.GetKind())
 }
 
 func TestResolveStreamIdleTimeout(t *testing.T) {
 	tests := []struct {
-		name        string
-		annotations map[string]string
-		expectNil   bool
-		expected    string
+		name              string
+		streamIdleTimeout string
+		annotations       map[string]string
+		expectEmpty       bool
+		expected          string
+		expectError       bool
 	}{
 		{
-			name: "With proxy-read-timeout",
+			name:              "Explicit StreamIdleTimeout takes precedence",
+			streamIdleTimeout: "3600s",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "1800",
+			},
+			expected: "3600s",
+		},
+		{
+			name:              "Explicit StreamIdleTimeout with complex format",
+			streamIdleTimeout: "1h30m",
+			expected:          "1h30m",
+		},
+		{
+			name:              "Invalid explicit StreamIdleTimeout",
+			streamIdleTimeout: "invalid",
+			expectError:       true,
+		},
+		{
+			name:              "Explicit timeout with 6 digits exceeds duration limit",
+			streamIdleTimeout: "100000s",
+			expectError:       true,
+		},
+		{
+			name: "Large legacy timeout (edge case)",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "86400", // 24 hours
+			},
+			expected: "86400s",
+		},
+		{
+			name: "Legacy annotation: proxy-read-timeout",
 			annotations: map[string]string{
 				AnnotationProxyReadTimeout: "1800",
 			},
 			expected: "1800s",
 		},
 		{
-			name: "Max of read and send",
+			name: "Legacy annotation: max of read and send",
 			annotations: map[string]string{
 				AnnotationProxyReadTimeout: "900",
 				AnnotationProxySendTimeout: "1800",
@@ -570,38 +750,64 @@ func TestResolveStreamIdleTimeout(t *testing.T) {
 			expected: "1800s",
 		},
 		{
-			name: "With proxy-send-timeout",
+			name: "Legacy annotation: proxy-send-timeout only",
 			annotations: map[string]string{
 				AnnotationProxySendTimeout: "900",
 			},
 			expected: "900s",
 		},
 		{
-			name: "Ignores zero",
+			name: "Legacy annotation: ignores zero",
 			annotations: map[string]string{
 				AnnotationProxyReadTimeout: "0",
 			},
-			expectNil: true,
+			expectEmpty: true,
 		},
 		{
-			name: "With proxy-connect-timeout only",
+			name: "Legacy annotation: ignores negative",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "-100",
+			},
+			expectEmpty: true,
+		},
+		{
+			name: "Legacy annotation: proxy-connect-timeout ignored",
 			annotations: map[string]string{
 				AnnotationProxyConnectTimeout: "600",
 			},
-			expectNil: true,
+			expectEmpty: true,
 		},
 		{
-			name:        "Without timeout annotations",
+			name:        "No timeout configuration",
 			annotations: map[string]string{},
-			expectNil:   true,
+			expectEmpty: true,
+		},
+		{
+			name: "Invalid annotation value ignored",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "not-a-number",
+			},
+			expectEmpty: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			timeout, err := resolveStreamIdleTimeout(tt.annotations)
+			route := &Route{
+				Metadata: Metadata{
+					Annotations: tt.annotations,
+				},
+				Spec: RouteSpec{
+					StreamIdleTimeout: tt.streamIdleTimeout,
+				},
+			}
+			timeout, err := resolveStreamIdleTimeout(route)
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
 			assert.NoError(t, err)
-			if tt.expectNil {
+			if tt.expectEmpty {
 				assert.Equal(t, "", timeout)
 				return
 			}
