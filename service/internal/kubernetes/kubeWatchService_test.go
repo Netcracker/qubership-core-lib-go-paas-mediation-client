@@ -114,6 +114,9 @@ func TestWatchRoutes_DualMode_UsesHTTPRoute(t *testing.T) {
 	testWatchRoutesUsesHTTPRoute(t, LegacyIngress+","+GatewayApiDefault)
 }
 
+// testWatchRoutesUsesHTTPRoute requires a route watch over the Gateway API to deliver
+// *entity.Route, the type an ingress route watch delivers. The HTTPRoute watch handler underneath
+// delivers *entity.HttpRoute.
 func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 	r := require.New(t)
 	fakeWatchExecutor := newFakeWatchExecutor()
@@ -137,16 +140,20 @@ func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 	r.NoError(err)
 	r.Equal(types.HTTPRoutes.String(), fakeWatchExecutor.requestedResources)
 
+	var watchEvent pmWatch.ApiEvent
 	verifyWatchHandler(r, func() {
-		httpRoute := createHttpRoute("test-http-route", 1, "1")
-		go fakeWatchExecutor.fakeWatcher.Add(httpRoute)
-		for watchEvent := range watchHandler.Channel {
-			r.Equal("ADDED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(httpRoute)
-			r.True(So(watchEvent.Object, ShouldResemble, expected))
-			break
-		}
+		go fakeWatchExecutor.fakeWatcher.Add(createHttpRoute("test-http-route", 1, "1"))
+		watchEvent = <-watchHandler.Channel
 	})
+
+	r.Equal("ADDED", watchEvent.Type)
+	r.Equal(&entity.Route{Metadata: entity.Metadata{
+		Kind:            "Route",
+		Name:            "test-http-route",
+		Namespace:       testNamespace1,
+		Generation:      1,
+		ResourceVersion: "1",
+	}}, watchEvent.Object)
 }
 
 func TestWatchRoutes_GatewayApiDefault_HTTPRouteNotSupported(t *testing.T) {
