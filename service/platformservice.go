@@ -209,6 +209,16 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)
 	}
 
+	var httpRouteIdleTimeout string
+	if builder.httpRouteIdleTimeout != nil {
+		httpRouteIdleTimeout = *builder.httpRouteIdleTimeout
+	} else {
+		httpRouteIdleTimeout = configloader.GetOrDefaultString(kubernetes.HTTPRouteRequestIdleTimeoutProperty, "")
+	}
+	if httpRouteIdleTimeout != "" {
+		kubeClientBuilder = kubeClientBuilder.WithHTTPRouteRequestIdleTimeout(httpRouteIdleTimeout)
+	}
+
 	kubeClient, err := kubeClientBuilder.Build()
 
 	if err != nil {

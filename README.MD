@@ -39,8 +39,9 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
 > resources alongside HTTPRoutes to configure idle timeouts and GRPC backend protocol.
 >
 > **Timeout priority (highest first):**
-> 1. `Route.Spec.StreamIdleTimeout` (explicit Gateway API duration, e.g., `"1800s"`, `"30m"`)
-> 2. Legacy nginx annotations: `max(proxy-read-timeout, proxy-send-timeout)` (auto-converted to `streamIdleTimeout`)
+> 1. `Route.Spec.StreamIdleTimeout` (explicit per-route Gateway API duration, e.g., `"1800s"`, `"30m"`)
+> 2. `HTTP_ROUTE_REQUEST_IDLE_TIMEOUT` / property `http.route.request.idle.timeout` (service/platform default)
+> 3. Legacy nginx annotations: `max(proxy-read-timeout, proxy-send-timeout)` (auto-converted to `streamIdleTimeout`)
 >
 > **Usage example:**
 > ```go
