@@ -8,6 +8,7 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	networkingV1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -495,12 +496,118 @@ func TestToHTTPRoute_WithTimeouts(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	route.Metadata.Annotations = map[string]string{
 		AnnotationProxyReadTimeout: "1800",
+		"platform.example/keep":    "yes",
 	}
 
 	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
 
-	assert.NotNil(t, httpRoute.Spec.Rules[0].Timeouts)
-	assert.Equal(t, "1800s", string(*httpRoute.Spec.Rules[0].Timeouts.Request))
+	assert.Nil(t, httpRoute.Spec.Rules[0].Timeouts)
+	_, hasNginx := httpRoute.Annotations[AnnotationProxyReadTimeout]
+	assert.False(t, hasNginx)
+	assert.Equal(t, "yes", httpRoute.Annotations["platform.example/keep"])
+
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "1800s", timeout)
+	mergeType, found, err := unstructured.NestedString(policy.Object, "spec", "mergeType")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "StrategicMerge", mergeType)
+}
+
+func TestToHTTPRoute_WithCustomFilters(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Spec.Filters = []gatewayv1.HTTPRouteFilter{{
+		Type: gatewayv1.HTTPRouteFilterResponseHeaderModifier,
+		ResponseHeaderModifier: &gatewayv1.HTTPHeaderFilter{
+			Remove: []string{"authorization"},
+		},
+	}}
+
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+	assert.Equal(t, 1, len(httpRoute.Spec.Rules[0].Filters))
+	assert.Equal(t, gatewayv1.HTTPRouteFilterResponseHeaderModifier, httpRoute.Spec.Rules[0].Filters[0].Type)
+}
+
+func TestToBackendTrafficPolicy_GrpcWithoutTimeout(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations = map[string]string{
+		AnnotationBackendProtocol: "GRPC",
+	}
+	policy, err := route.ToBackendTrafficPolicy()
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+	useClient, found, err := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.True(t, useClient)
+}
+
+func TestResolveStreamIdleTimeout(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		expectNil   bool
+		expected    string
+	}{
+		{
+			name: "With proxy-read-timeout",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "1800",
+			},
+			expected: "1800s",
+		},
+		{
+			name: "Max of read and send",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "900",
+				AnnotationProxySendTimeout: "1800",
+			},
+			expected: "1800s",
+		},
+		{
+			name: "With proxy-send-timeout",
+			annotations: map[string]string{
+				AnnotationProxySendTimeout: "900",
+			},
+			expected: "900s",
+		},
+		{
+			name: "Ignores zero",
+			annotations: map[string]string{
+				AnnotationProxyReadTimeout: "0",
+			},
+			expectNil: true,
+		},
+		{
+			name: "With proxy-connect-timeout only",
+			annotations: map[string]string{
+				AnnotationProxyConnectTimeout: "600",
+			},
+			expectNil: true,
+		},
+		{
+			name:        "Without timeout annotations",
+			annotations: map[string]string{},
+			expectNil:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			timeout, err := resolveStreamIdleTimeout(tt.annotations)
+			assert.NoError(t, err)
+			if tt.expectNil {
+				assert.Equal(t, "", timeout)
+				return
+			}
+			assert.Equal(t, tt.expected, timeout)
+		})
+	}
 }
 
 func TestPathMatchTypeFromRoute(t *testing.T) {
@@ -615,53 +722,13 @@ func TestBuildSessionPersistence(t *testing.T) {
 	assert.Equal(t, "7200s", string(*sessionPersistence.AbsoluteTimeout))
 }
 
-func TestBuildTimeouts(t *testing.T) {
-	tests := []struct {
-		name            string
-		annotations     map[string]string
-		expectNil       bool
-		expectedRequest string
-	}{
-		{
-			name: "With proxy-read-timeout",
-			annotations: map[string]string{
-				AnnotationProxyReadTimeout: "1800",
-			},
-			expectedRequest: "1800s",
-		},
-		{
-			name: "With proxy-send-timeout",
-			annotations: map[string]string{
-				AnnotationProxySendTimeout: "900",
-			},
-			expectedRequest: "900s",
-		},
-		{
-			name: "With proxy-connect-timeout only",
-			annotations: map[string]string{
-				AnnotationProxyConnectTimeout: "600",
-			},
-			expectNil: true,
-		},
-		{
-			name:        "Without timeout annotations",
-			annotations: map[string]string{},
-			expectNil:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			timeouts := buildTimeouts(tt.annotations)
-			if tt.expectNil {
-				assert.Nil(t, timeouts)
-				return
-			}
-			assert.NotNil(t, timeouts)
-			assert.NotNil(t, timeouts.Request)
-			assert.Equal(t, tt.expectedRequest, string(*timeouts.Request))
-		})
-	}
+func TestHttpRouteMetadataAnnotations(t *testing.T) {
+	result := httpRouteMetadataAnnotations(map[string]string{
+		AnnotationProxyReadTimeout: "1800",
+		"platform.example/keep":    "yes",
+	})
+	assert.Equal(t, map[string]string{"platform.example/keep": "yes"}, result)
+	assert.Nil(t, httpRouteMetadataAnnotations(map[string]string{AnnotationProxyReadTimeout: "1"}))
 }
 
 func TestNormalizeRouteAnnotations(t *testing.T) {
