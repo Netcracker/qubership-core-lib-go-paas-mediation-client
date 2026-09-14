@@ -1,10 +1,16 @@
 package entity
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
 	"github.com/netcracker/qubership-core-lib-go/v3/logging"
 	v1 "github.com/openshift/api/route/v1"
 	"k8s.io/api/extensions/v1beta1"
 	networkingV1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -18,7 +24,15 @@ const (
 	AnnotationProxyReadTimeout    = "nginx.ingress.kubernetes.io/proxy-read-timeout"
 	AnnotationProxySendTimeout    = "nginx.ingress.kubernetes.io/proxy-send-timeout"
 	AnnotationProxyConnectTimeout = "nginx.ingress.kubernetes.io/proxy-connect-timeout"
+	AnnotationBackendProtocol     = "nginx.ingress.kubernetes.io/backend-protocol"
+
+	BackendTrafficPolicyAPIVersion = "gateway.envoyproxy.io/v1alpha1"
+	BackendTrafficPolicyKind       = "BackendTrafficPolicy"
+	ManagedByLabel                 = "app.kubernetes.io/managed-by"
+	ManagedByPaasMediation         = "paas-mediation-client"
 )
+
+var gatewayAPIDuration = regexp.MustCompile(`^([0-9]{1,5}(h|m|s|ms)){1,4}$`)
 
 type (
 	// todo change to Ingress in next major release AND REWRITE entity to comply with Ingress structure!
@@ -28,12 +42,13 @@ type (
 	}
 
 	RouteSpec struct {
-		Host             string    `json:"host"`
-		PathType         string    `json:"pathType"`
-		Path             string    `json:"path"`
-		Service          Target    `json:"to"`
-		Port             RoutePort `json:"port"`
-		IngressClassName *string   `json:"ingressClassName"`
+		Host             string                      `json:"host"`
+		PathType         string                      `json:"pathType"`
+		Path             string                      `json:"path"`
+		Service          Target                      `json:"to"`
+		Port             RoutePort                   `json:"port"`
+		IngressClassName *string                     `json:"ingressClassName"`
+		Filters          []gatewayv1.HTTPRouteFilter `json:"filters,omitempty"`
 	}
 
 	RoutePort struct {
@@ -252,13 +267,20 @@ func (route Route) GetMetadata() Metadata {
 func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.HTTPRoute {
 	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
 
+	meta := route.Metadata.ToObjectMeta()
+	meta.Annotations = httpRouteMetadataAnnotations(annotations)
+
 	httpRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: *route.Metadata.ToObjectMeta(),
+		ObjectMeta: *meta,
 	}
 
 	ns := gatewayv1.Namespace(gatewayNamespace)
+	group := gatewayv1.Group(gatewayv1.GroupName)
+	kind := gatewayv1.Kind("Gateway")
 	httpRoute.Spec.ParentRefs = []gatewayv1.ParentReference{
 		{
+			Group:     &group,
+			Kind:      &kind,
 			Name:      gatewayv1.ObjectName(gatewayName),
 			Namespace: &ns,
 		},
@@ -270,11 +292,85 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	return httpRoute
 }
 
+// ToBackendTrafficPolicy builds Envoy Gateway BackendTrafficPolicy for idle timeout and/or gRPC.
+// Returns nil when neither is needed. Idle timeout comes from proxy-read/send annotations
+// (streamIdleTimeout), not HTTPRoute.timeouts.request.
+func (route Route) ToBackendTrafficPolicy() (*unstructured.Unstructured, error) {
+	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
+	streamIdleTimeout, err := resolveStreamIdleTimeout(annotations)
+	if err != nil {
+		return nil, err
+	}
+	isGrpc := strings.EqualFold(annotations[AnnotationBackendProtocol], "GRPC")
+	if !isGrpc && streamIdleTimeout == "" {
+		return nil, nil
+	}
+
+	spec := map[string]interface{}{
+		"mergeType": "StrategicMerge",
+		"targetRefs": []interface{}{
+			map[string]interface{}{
+				"group": "gateway.networking.k8s.io",
+				"kind":  "HTTPRoute",
+				"name":  route.Metadata.Name,
+			},
+		},
+	}
+	if isGrpc {
+		spec["useClientProtocol"] = true
+	}
+	if streamIdleTimeout != "" {
+		spec["timeout"] = map[string]interface{}{
+			"http": map[string]interface{}{
+				"streamIdleTimeout": streamIdleTimeout,
+			},
+		}
+	}
+
+	labels := map[string]string{
+		ManagedByLabel: ManagedByPaasMediation,
+	}
+	for k, v := range route.Metadata.Labels {
+		labels[k] = v
+	}
+
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": BackendTrafficPolicyAPIVersion,
+			"kind":       BackendTrafficPolicyKind,
+			"metadata": map[string]interface{}{
+				"name":      route.Metadata.Name,
+				"namespace": route.Metadata.Namespace,
+				"labels":    labels,
+			},
+			"spec": spec,
+		},
+	}, nil
+}
+
 func normalizeRouteAnnotations(annotations map[string]string) map[string]string {
 	if annotations == nil {
 		return make(map[string]string)
 	}
 	return annotations
+}
+
+// httpRouteMetadataAnnotations drops nginx-specific keys; Envoy Gateway ignores them on HTTPRoute.
+func httpRouteMetadataAnnotations(annotations map[string]string) map[string]string {
+	if len(annotations) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(annotations))
+	for k, v := range annotations {
+		if strings.HasPrefix(k, "nginx.ingress.kubernetes.io/") {
+			continue
+		}
+		out[k] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func pathMatchTypeFromRoute(pathType string) gatewayv1.PathMatchType {
@@ -302,6 +398,9 @@ func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HT
 	pathType := pathMatchTypeFromRoute(route.Spec.PathType)
 	path := routePathValue(route.Spec.Path)
 	port := routeBackendPort(route.Spec.Port.TargetPort)
+	groupCore := gatewayv1.Group("")
+	kindService := gatewayv1.Kind("Service")
+	weight := int32(1)
 
 	rule := gatewayv1.HTTPRouteRule{
 		Matches: []gatewayv1.HTTPRouteMatch{
@@ -316,9 +415,12 @@ func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HT
 			{
 				BackendRef: gatewayv1.BackendRef{
 					BackendObjectReference: gatewayv1.BackendObjectReference{
-						Name: gatewayv1.ObjectName(route.Spec.Service.Name),
-						Port: &port,
+						Group: &groupCore,
+						Kind:  &kindService,
+						Name:  gatewayv1.ObjectName(route.Spec.Service.Name),
+						Port:  &port,
 					},
+					Weight: &weight,
 				},
 			},
 		},
@@ -330,8 +432,8 @@ func buildHTTPRouteRule(route Route, annotations map[string]string) gatewayv1.HT
 		}
 	}
 
-	if timeouts := buildTimeouts(annotations); timeouts != nil {
-		rule.Timeouts = timeouts
+	if len(route.Spec.Filters) > 0 {
+		rule.Filters = route.Spec.Filters
 	}
 
 	return rule
@@ -355,24 +457,42 @@ func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPe
 	return sessionPersistence
 }
 
-func buildTimeouts(annotations map[string]string) *gatewayv1.HTTPRouteTimeouts {
+// resolveStreamIdleTimeout derives BackendTrafficPolicy streamIdleTimeout from nginx
+// proxy-read/send annotations (max of the two). Non-positive values are ignored.
+func resolveStreamIdleTimeout(annotations map[string]string) (string, error) {
 	if connectTimeout := annotations[AnnotationProxyConnectTimeout]; connectTimeout != "" {
-		logger.Warn("annotation %s=%s requires BackendTrafficPolicy and is not applied to HTTPRoute", AnnotationProxyConnectTimeout, connectTimeout)
+		logger.Warn("annotation %s=%s is not mapped; Envoy Gateway TCP connect defaults are used",
+			AnnotationProxyConnectTimeout, connectTimeout)
 	}
 
-	requestTimeoutValue := ""
-	if readTimeout := annotations[AnnotationProxyReadTimeout]; readTimeout != "" {
-		requestTimeoutValue = readTimeout
-	} else if sendTimeout := annotations[AnnotationProxySendTimeout]; sendTimeout != "" {
-		requestTimeoutValue = sendTimeout
+	maxSec := -1
+	for _, annotation := range []string{AnnotationProxyReadTimeout, AnnotationProxySendTimeout} {
+		value := strings.TrimSpace(annotations[annotation])
+		if value == "" {
+			continue
+		}
+		sec, err := strconv.Atoi(value)
+		if err != nil {
+			logger.Warn("Ignoring annotation %s value %q: expected a number of seconds", annotation, value)
+			continue
+		}
+		if sec <= 0 {
+			logger.Warn("Ignoring annotation %s value %q: non-positive timeouts are not converted to streamIdleTimeout", annotation, value)
+			continue
+		}
+		if sec > maxSec {
+			maxSec = sec
+		}
+	}
+	if maxSec < 0 {
+		return "", nil
 	}
 
-	if requestTimeoutValue == "" {
-		return nil
+	idleTimeout := strconv.Itoa(maxSec) + "s"
+	if !gatewayAPIDuration.MatchString(idleTimeout) {
+		return "", fmt.Errorf("timeout %s derived from legacy annotations is not a valid Gateway API duration", idleTimeout)
 	}
-
-	timeout := gatewayv1.Duration(requestTimeoutValue + "s")
-	return &gatewayv1.HTTPRouteTimeouts{Request: &timeout}
+	return idleTimeout, nil
 }
 
 func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {

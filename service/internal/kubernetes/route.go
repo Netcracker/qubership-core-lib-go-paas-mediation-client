@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
@@ -276,6 +277,11 @@ func (kube *Kubernetes) upsertHTTPRoute(ctx context.Context, route *entity.Route
 	}
 	logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
 
+	if err := kube.applyBackendTrafficPolicy(ctx, route, namespace); err != nil {
+		logger.ErrorC(ctx, "Error to apply BackendTrafficPolicy for %s: %+v", route.Name, err)
+		return routeResourceResult{err: err}
+	}
+
 	routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
@@ -483,6 +489,9 @@ func (kube *Kubernetes) deleteRouteHTTPRoute(ctx context.Context, routeName, nam
 	if kube.Cache.HTTPRoute != nil {
 		kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
 	}
+	if delErr := kube.deleteOwnedBackendTrafficPolicy(ctx, routeName, namespace); delErr != nil {
+		logger.WarnC(ctx, "Failed to delete BackendTrafficPolicy %s: %v", routeName, delErr)
+	}
 	return nil
 }
 
@@ -645,7 +654,6 @@ func (kube *Kubernetes) modifyIngressClassForBG2(ingress any) {
 
 func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]string) error {
 	criticalAnnotations := map[string]string{
-		AnnotationBackendProtocol:   BackendTlsOrTrafficWarning,
 		AnnotationSecureBackends:    BackendTLSWarning,
 		AnnotationAuthType:          SecurityPolicyWarning,
 		AnnotationSSLPassthrough:    TlsRouteWarning,
@@ -664,6 +672,13 @@ func (kube *Kubernetes) validateAnnotationsForGatewayAPI(annotations map[string]
 				fmt.Sprintf("not supported for HTTPRoute creation: %s", message),
 			))
 		}
+	}
+	if protocol := annotations[AnnotationBackendProtocol]; protocol != "" && !strings.EqualFold(protocol, "GRPC") {
+		fieldErrors = append(fieldErrors, field.Invalid(
+			field.NewPath("metadata", "annotations").Key(AnnotationBackendProtocol),
+			protocol,
+			fmt.Sprintf("not supported for HTTPRoute creation: %s", BackendTlsOrTrafficWarning),
+		))
 	}
 	if len(fieldErrors) == 0 {
 		return nil
@@ -688,6 +703,11 @@ func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route
 	createdHTTPRoute, err := kube.getGatewayV1Client().HTTPRoutes(namespace).Create(ctx, httpRoute, v1.CreateOptions{})
 	if err != nil {
 		logger.ErrorC(ctx, "Error to create HTTPRoute: %+v", err)
+		return nil, err
+	}
+
+	if err := kube.applyBackendTrafficPolicy(ctx, route, namespace); err != nil {
+		logger.ErrorC(ctx, "Error to apply BackendTrafficPolicy for %s: %+v", route.Name, err)
 		return nil, err
 	}
 
