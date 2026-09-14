@@ -42,13 +42,14 @@ type (
 	}
 
 	RouteSpec struct {
-		Host             string                      `json:"host"`
-		PathType         string                      `json:"pathType"`
-		Path             string                      `json:"path"`
-		Service          Target                      `json:"to"`
-		Port             RoutePort                   `json:"port"`
-		IngressClassName *string                     `json:"ingressClassName"`
-		Filters          []gatewayv1.HTTPRouteFilter `json:"filters,omitempty"`
+		Host              string                      `json:"host"`
+		PathType          string                      `json:"pathType"`
+		Path              string                      `json:"path"`
+		Service           Target                      `json:"to"`
+		Port              RoutePort                   `json:"port"`
+		IngressClassName  *string                     `json:"ingressClassName"`
+		Filters           []gatewayv1.HTTPRouteFilter `json:"filters,omitempty"`
+		StreamIdleTimeout string                      `json:"streamIdleTimeout,omitempty"`
 	}
 
 	RoutePort struct {
@@ -292,15 +293,13 @@ func (route Route) ToHTTPRoute(gatewayNamespace, gatewayName string) *gatewayv1.
 	return httpRoute
 }
 
-// ToBackendTrafficPolicy builds Envoy Gateway BackendTrafficPolicy for idle timeout and/or gRPC.
-// Returns nil when neither is needed. Idle timeout comes from proxy-read/send annotations
-// (streamIdleTimeout), not HTTPRoute.timeouts.request.
 func (route Route) ToBackendTrafficPolicy() (*unstructured.Unstructured, error) {
-	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
-	streamIdleTimeout, err := resolveStreamIdleTimeout(annotations)
+	streamIdleTimeout, err := resolveStreamIdleTimeout(&route)
 	if err != nil {
 		return nil, err
 	}
+
+	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
 	isGrpc := strings.EqualFold(annotations[AnnotationBackendProtocol], "GRPC")
 	if !isGrpc && streamIdleTimeout == "" {
 		return nil, nil
@@ -334,18 +333,17 @@ func (route Route) ToBackendTrafficPolicy() (*unstructured.Unstructured, error) 
 		labels[k] = v
 	}
 
-	return &unstructured.Unstructured{
+	policy := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": BackendTrafficPolicyAPIVersion,
 			"kind":       BackendTrafficPolicyKind,
-			"metadata": map[string]interface{}{
-				"name":      route.Metadata.Name,
-				"namespace": route.Metadata.Namespace,
-				"labels":    labels,
-			},
-			"spec": spec,
+			"spec":       spec,
 		},
-	}, nil
+	}
+	policy.SetName(route.Metadata.Name)
+	policy.SetNamespace(route.Metadata.Namespace)
+	policy.SetLabels(labels)
+	return policy, nil
 }
 
 func normalizeRouteAnnotations(annotations map[string]string) map[string]string {
@@ -457,34 +455,44 @@ func buildSessionPersistence(annotations map[string]string) *gatewayv1.SessionPe
 	return sessionPersistence
 }
 
-// resolveStreamIdleTimeout derives BackendTrafficPolicy streamIdleTimeout from nginx
-// proxy-read/send annotations (max of the two). Non-positive values are ignored.
-func resolveStreamIdleTimeout(annotations map[string]string) (string, error) {
+func parseTimeoutSeconds(annotation, value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	sec, err := strconv.Atoi(value)
+	if err != nil || sec <= 0 {
+		if err != nil {
+			logger.Warn("Ignoring annotation %s value %q: expected a number of seconds", annotation, value)
+		} else {
+			logger.Warn("Ignoring annotation %s value %q: non-positive timeouts are not converted to streamIdleTimeout", annotation, value)
+		}
+		return 0
+	}
+	return sec
+}
+
+func resolveStreamIdleTimeout(route *Route) (string, error) {
+	// Priority 1: Explicit StreamIdleTimeout field
+	if route.Spec.StreamIdleTimeout != "" {
+		if !gatewayAPIDuration.MatchString(route.Spec.StreamIdleTimeout) {
+			return "", fmt.Errorf("streamIdleTimeout %q is not a valid Gateway API duration", route.Spec.StreamIdleTimeout)
+		}
+		return route.Spec.StreamIdleTimeout, nil
+	}
+
+	// Priority 2: Legacy annotations
+	annotations := normalizeRouteAnnotations(route.Metadata.Annotations)
 	if connectTimeout := annotations[AnnotationProxyConnectTimeout]; connectTimeout != "" {
 		logger.Warn("annotation %s=%s is not mapped; Envoy Gateway TCP connect defaults are used",
 			AnnotationProxyConnectTimeout, connectTimeout)
 	}
 
-	maxSec := -1
-	for _, annotation := range []string{AnnotationProxyReadTimeout, AnnotationProxySendTimeout} {
-		value := strings.TrimSpace(annotations[annotation])
-		if value == "" {
-			continue
-		}
-		sec, err := strconv.Atoi(value)
-		if err != nil {
-			logger.Warn("Ignoring annotation %s value %q: expected a number of seconds", annotation, value)
-			continue
-		}
-		if sec <= 0 {
-			logger.Warn("Ignoring annotation %s value %q: non-positive timeouts are not converted to streamIdleTimeout", annotation, value)
-			continue
-		}
-		if sec > maxSec {
-			maxSec = sec
-		}
-	}
-	if maxSec < 0 {
+	readTimeout := parseTimeoutSeconds(AnnotationProxyReadTimeout, annotations[AnnotationProxyReadTimeout])
+	sendTimeout := parseTimeoutSeconds(AnnotationProxySendTimeout, annotations[AnnotationProxySendTimeout])
+
+	maxSec := max(readTimeout, sendTimeout)
+	if maxSec == 0 {
 		return "", nil
 	}
 

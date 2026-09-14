@@ -32,6 +32,37 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
 
 ---
 
+> ## Gateway API HTTPRoute Timeouts
+>
+> When `GATEWAY_SYSTEM_TYPE` contains `gateway-api-default`, the library automatically creates 
+> [Envoy Gateway BackendTrafficPolicy](https://gateway.envoyproxy.io/docs/api/extension_types/#backendtrafficpolicy) 
+> resources alongside HTTPRoutes to configure idle timeouts and GRPC backend protocol.
+>
+> **Timeout priority (highest first):**
+> 1. `Route.Spec.StreamIdleTimeout` (explicit Gateway API duration, e.g., `"1800s"`, `"30m"`)
+> 2. Legacy nginx annotations: `max(proxy-read-timeout, proxy-send-timeout)` (auto-converted to `streamIdleTimeout`)
+>
+> **Usage example:**
+> ```go
+> route := &entity.Route{
+>     Spec: entity.RouteSpec{
+>         Host: "example.com",
+>         StreamIdleTimeout: "1800s",  // Explicit timeout - takes precedence over annotations
+>         // For filters (headers, redirects, CORS), use Filters field:
+>         // Filters: []gatewayv1.HTTPRouteFilter{...},
+>     },
+> }
+> client.CreateRoute(ctx, route, namespace)
+> ```
+>
+> **Notes:**
+> - `proxy-connect-timeout` is ignored (gateway defaults are sufficient)
+> - Do NOT use HTTPRoute `spec.timeouts.request` (kills streaming requests)
+> - BackendTrafficPolicy is Envoy Gateway alpha API (v1alpha1)
+> - See the platform Gateway API Migration guide (section on custom timeouts) for full details.
+
+---
+
 <!-- TOC -->
       * [Supported operations:](#supported-operations)
       * [Usage:](#usage)
