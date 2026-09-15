@@ -135,35 +135,46 @@ func TestApplyBackendTrafficPolicy_DeletesWhenNoLongerNeeded(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestApplyBackendTrafficPolicy_SkipsUnmanagedUpdateAndDelete(t *testing.T) {
+func TestApplyBackendTrafficPolicy_UpdatesAndDeletesCompanionPolicy(t *testing.T) {
 	dyn := newDynamicFake()
 	kube := newKubeWithDynamic(t, dyn, "")
 	ctx := context.Background()
 
-	foreign := &unstructured.Unstructured{Object: map[string]interface{}{
+	existing := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.envoyproxy.io/v1alpha1",
 		"kind":       "BackendTrafficPolicy",
 		"metadata": map[string]interface{}{
-			"name":      "foreign",
+			"name":      "companion",
 			"namespace": testNamespace1,
 			"labels": map[string]interface{}{
-				"app.kubernetes.io/managed-by": "someone-else",
+				"app.kubernetes.io/managed-by": "saasDeployer",
 			},
 		},
-		"spec": map[string]interface{}{},
+		"spec": map[string]interface{}{
+			"timeout": map[string]interface{}{
+				"http": map[string]interface{}{
+					"streamIdleTimeout": "1800s",
+				},
+			},
+		},
 	}}
-	_, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Create(ctx, foreign, metav1.CreateOptions{})
+	_, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Create(ctx, existing, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	route := btpRoute("foreign", map[string]string{entity.AnnotationProxyReadTimeout: "60"})
+	route := btpRoute("companion", nil)
+	route.Spec.StreamIdleTimeout = "111s"
 	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
-	got, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "foreign", metav1.GetOptions{})
+	got, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, "someone-else", got.GetLabels()[entity.ManagedByLabel])
+	assert.Equal(t, entity.ManagedByPaasMediation, got.GetLabels()[entity.ManagedByLabel])
+	timeout, found, err := unstructured.NestedString(got.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "111s", timeout)
 
-	require.NoError(t, kube.deleteOwnedBackendTrafficPolicy(ctx, "foreign", testNamespace1))
-	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "foreign", metav1.GetOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, kube.deleteOwnedBackendTrafficPolicy(ctx, "companion", testNamespace1))
+	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
+	assert.True(t, paasErrors.IsNotFound(err))
 }
 
 func TestApplyBackendTrafficPolicy_InvalidTimeout(t *testing.T) {
