@@ -44,10 +44,6 @@ func (kube *Kubernetes) backendTrafficPolicyClient(namespace string) dynamic.Res
 	return dyn.Resource(backendTrafficPolicyGVR).Namespace(namespace)
 }
 
-func isManagedBackendTrafficPolicy(obj metav1.Object) bool {
-	return obj.GetLabels()[entity.ManagedByLabel] == entity.ManagedByPaasMediation
-}
-
 func skipOrWrapPolicyError(ctx context.Context, operation, name string, err error) error {
 	if isIgnorablePolicyAbsence(err) {
 		logger.WarnC(ctx, "Skipping BackendTrafficPolicy %s for %s: %v", operation, name, err)
@@ -86,12 +82,6 @@ func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *en
 		return fmt.Errorf("failed to get BackendTrafficPolicy %s: %w", route.Name, getErr)
 	}
 
-	if !isManagedBackendTrafficPolicy(existing) {
-		logger.WarnC(ctx, "Skipping BackendTrafficPolicy update for %s: not managed by %s",
-			route.Name, entity.ManagedByPaasMediation)
-		return nil
-	}
-
 	policy.SetResourceVersion(existing.GetResourceVersion())
 	_, updateErr := client.Update(ctx, policy, metav1.UpdateOptions{})
 	if updateErr != nil {
@@ -104,20 +94,6 @@ func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *en
 func (kube *Kubernetes) deleteOwnedBackendTrafficPolicy(ctx context.Context, name, namespace string) error {
 	client := kube.backendTrafficPolicyClient(namespace)
 	if client == nil {
-		return nil
-	}
-
-	existing, err := client.Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if isIgnorablePolicyAbsence(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to get BackendTrafficPolicy %s: %w", name, err)
-	}
-
-	if !isManagedBackendTrafficPolicy(existing) {
-		logger.WarnC(ctx, "Skipping BackendTrafficPolicy delete for %s: not managed by %s",
-			name, entity.ManagedByPaasMediation)
 		return nil
 	}
 
