@@ -671,8 +671,9 @@ func TestToBackendTrafficPolicy_LabelsAndMetadata(t *testing.T) {
 	route.Metadata.Name = "test-route"
 	route.Metadata.Namespace = "test-namespace"
 	route.Metadata.Labels = map[string]string{
-		"app": "test-app",
-		"env": "prod",
+		"app":          "test-app",
+		"env":          "prod",
+		ManagedByLabel: "saasDeployer",
 	}
 	route.Spec.StreamIdleTimeout = "60s"
 
