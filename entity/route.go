@@ -331,12 +331,11 @@ func (route Route) ToBackendTrafficPolicy(defaultIdleTimeout string) (*unstructu
 		}
 	}
 
-	labels := map[string]string{
-		ManagedByLabel: ManagedByPaasMediation,
-	}
+	labels := make(map[string]string, len(route.Metadata.Labels)+1)
 	for k, v := range route.Metadata.Labels {
 		labels[k] = v
 	}
+	labels[ManagedByLabel] = ManagedByPaasMediation
 
 	policy := &unstructured.Unstructured{
 		Object: map[string]interface{}{
