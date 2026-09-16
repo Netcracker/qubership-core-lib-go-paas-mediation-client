@@ -101,7 +101,7 @@ func TestApplyBackendTrafficPolicy_CreateUpdateDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "900s", timeout)
 
-	require.NoError(t, kube.deleteOwnedBackendTrafficPolicy(ctx, "route-btp", testNamespace1))
+	require.NoError(t, kube.deleteBackendTrafficPolicy(ctx, "route-btp", testNamespace1))
 	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-btp", metav1.GetOptions{})
 	assert.True(t, err != nil)
 }
@@ -172,7 +172,7 @@ func TestApplyBackendTrafficPolicy_UpdatesAndDeletesCompanionPolicy(t *testing.T
 	assert.True(t, found)
 	assert.Equal(t, "111s", timeout)
 
-	require.NoError(t, kube.deleteOwnedBackendTrafficPolicy(ctx, "companion", testNamespace1))
+	require.NoError(t, kube.deleteBackendTrafficPolicy(ctx, "companion", testNamespace1))
 	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
 	assert.True(t, paasErrors.IsNotFound(err))
 }
@@ -184,6 +184,19 @@ func TestApplyBackendTrafficPolicy_InvalidTimeout(t *testing.T) {
 	route.Spec.StreamIdleTimeout = "not-a-duration"
 	err := kube.applyBackendTrafficPolicy(context.Background(), route, testNamespace1)
 	assert.Error(t, err)
+	assert.True(t, paasErrors.IsBadRequest(err))
+}
+
+func TestApplyBackendTrafficPolicy_RejectsUnsupportedAnnotations(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "")
+	route := btpRoute("bad-ann", map[string]string{
+		entity.AnnotationProxyReadTimeout: "60",
+		AnnotationConfigSnippet:           "something",
+	})
+	err := kube.applyBackendTrafficPolicy(context.Background(), route, testNamespace1)
+	assert.Error(t, err)
+	assert.True(t, paasErrors.IsInvalid(err))
 }
 
 func TestWithHTTPRouteRequestIdleTimeout_InvalidRejectedAtBuild(t *testing.T) {
@@ -218,10 +231,10 @@ func TestApplyBackendTrafficPolicy_CreateIgnorableAbsence(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestDeleteOwnedBackendTrafficPolicy_SkipsWithoutDynamic(t *testing.T) {
+func TestDeleteBackendTrafficPolicy_SkipsWithoutDynamic(t *testing.T) {
 	kube, err := NewTestKubernetesClient(testNamespace1, newTestBackendAPI(nil))
 	require.NoError(t, err)
-	assert.NoError(t, kube.deleteOwnedBackendTrafficPolicy(context.Background(), "missing", testNamespace1))
+	assert.NoError(t, kube.deleteBackendTrafficPolicy(context.Background(), "missing", testNamespace1))
 }
 
 func TestIsIgnorablePolicyAbsence(t *testing.T) {
