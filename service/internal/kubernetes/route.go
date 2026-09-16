@@ -489,7 +489,7 @@ func (kube *Kubernetes) deleteRouteHTTPRoute(ctx context.Context, routeName, nam
 	if kube.Cache.HTTPRoute != nil {
 		kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
 	}
-	if delErr := kube.deleteOwnedBackendTrafficPolicy(ctx, routeName, namespace); delErr != nil {
+	if delErr := kube.deleteBackendTrafficPolicy(ctx, routeName, namespace); delErr != nil {
 		logger.WarnC(ctx, "Failed to delete BackendTrafficPolicy %s: %v", routeName, delErr)
 	}
 	return nil

@@ -100,6 +100,27 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
 > client.CreateRoute(ctx, route, namespace)
 > ```
 >
+> **RBAC (required on the service that uses this library):** create/update/delete of HTTPRoute also create/update/delete
+> a companion `BackendTrafficPolicy`. The service ServiceAccount must be allowed to manage
+> `gateway.envoyproxy.io` `backendtrafficpolicies` (same verbs as for HTTPRoute writes):
+>
+> ```yaml
+> - apiGroups:
+>     - gateway.envoyproxy.io
+>   verbs:
+>     - get
+>     - list
+>     - watch
+>     - create
+>     - update
+>     - patch
+>     - delete
+>   resources:
+>     - backendtrafficpolicies
+> ```
+>
+> Without these permissions HTTPRoute may still be created, but BackendTrafficPolicy apply is skipped or fails.
+>
 > **Notes:**
 > - Duration must include a unit (`s`, `m`, `h`, `ms`). `"668"` without a suffix is invalid.
 > - `proxy-connect-timeout` is ignored (gateway defaults are sufficient)
@@ -152,7 +173,8 @@ service.NewPlatformClientBuilder().WithBasicCaches().Build()
 
 #### Create client with all types of basic caches and [Gateway API](https://gateway-api.sigs.k8s.io/) route caches ([HTTPRoute](https://gateway-api.sigs.k8s.io/reference/spec/#httproute), [GRPCRoute](https://gateway-api.sigs.k8s.io/reference/spec/#grpcroute)) enabled
 
-> Ensure you have sufficient permissions to operate (`get`, `list`, `watch`) with `gateway.networking.k8s.io/v1` entities (`HTTPRoute`, `GRPCRoute`). 
+> Ensure you have sufficient permissions to operate (`get`, `list`, `watch`) with `gateway.networking.k8s.io/v1` entities (`HTTPRoute`, `GRPCRoute`).
+> For HTTPRoute create/update/delete, also grant `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` on `gateway.envoyproxy.io` `backendtrafficpolicies`. 
 
 ```
 service.NewPlatformClientBuilder().WithBasicCaches().WithGatewayApiRoutesCaches.Build()

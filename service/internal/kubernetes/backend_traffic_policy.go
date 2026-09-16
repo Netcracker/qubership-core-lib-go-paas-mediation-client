@@ -10,6 +10,7 @@ import (
 	paasErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
@@ -44,6 +45,14 @@ func (kube *Kubernetes) backendTrafficPolicyClient(namespace string) dynamic.Res
 	return dyn.Resource(backendTrafficPolicyGVR).Namespace(namespace)
 }
 
+func (kube *Kubernetes) backendTrafficPolicyClientOrSkip(ctx context.Context, namespace, name string) dynamic.ResourceInterface {
+	client := kube.backendTrafficPolicyClient(namespace)
+	if client == nil {
+		logger.WarnC(ctx, "Dynamic client is not configured; skipping BackendTrafficPolicy for %s", name)
+	}
+	return client
+}
+
 func skipOrWrapPolicyError(ctx context.Context, operation, name string, err error) error {
 	if isIgnorablePolicyAbsence(err) {
 		logger.WarnC(ctx, "Skipping BackendTrafficPolicy %s for %s: %v", operation, name, err)
@@ -52,21 +61,31 @@ func skipOrWrapPolicyError(ctx context.Context, operation, name string, err erro
 	return fmt.Errorf("failed to %s BackendTrafficPolicy %s: %w", operation, name, err)
 }
 
-func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *entity.Route, namespace string) error {
-	client := kube.backendTrafficPolicyClient(namespace)
-	if client == nil {
-		logger.WarnC(ctx, "Dynamic client is not configured; skipping BackendTrafficPolicy for %s", route.Name)
-		return nil
+func (kube *Kubernetes) backendTrafficPolicyFromRoute(route *entity.Route, namespace string) (*unstructured.Unstructured, error) {
+	if err := kube.validateAnnotationsForGatewayAPI(route.Metadata.Annotations); err != nil {
+		return nil, err
 	}
-
 	routeCopy := *route
 	routeCopy.Metadata.Namespace = namespace
 	policy, err := routeCopy.ToBackendTrafficPolicy(kube.HTTPRouteRequestIdleTimeout)
 	if err != nil {
+		return nil, paasErrors.NewBadRequest(err.Error())
+	}
+	return policy, nil
+}
+
+func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *entity.Route, namespace string) error {
+	client := kube.backendTrafficPolicyClientOrSkip(ctx, namespace, route.Name)
+	if client == nil {
+		return nil
+	}
+
+	policy, err := kube.backendTrafficPolicyFromRoute(route, namespace)
+	if err != nil {
 		return err
 	}
 	if policy == nil {
-		return kube.deleteOwnedBackendTrafficPolicy(ctx, route.Name, namespace)
+		return kube.deleteBackendTrafficPolicy(ctx, route.Name, namespace)
 	}
 
 	existing, getErr := client.Get(ctx, route.Name, metav1.GetOptions{})
@@ -91,8 +110,8 @@ func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *en
 	return nil
 }
 
-func (kube *Kubernetes) deleteOwnedBackendTrafficPolicy(ctx context.Context, name, namespace string) error {
-	client := kube.backendTrafficPolicyClient(namespace)
+func (kube *Kubernetes) deleteBackendTrafficPolicy(ctx context.Context, name, namespace string) error {
+	client := kube.backendTrafficPolicyClientOrSkip(ctx, namespace, name)
 	if client == nil {
 		return nil
 	}
