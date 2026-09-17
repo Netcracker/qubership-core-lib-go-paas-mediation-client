@@ -65,11 +65,19 @@ func btpRoute(name string, annotations map[string]string) *entity.Route {
 	}
 }
 
+func applyPolicyFromRoute(kube *Kubernetes, ctx context.Context, route *entity.Route, namespace string) error {
+	policy, err := kube.backendTrafficPolicyFromRoute(route, namespace)
+	if err != nil {
+		return err
+	}
+	return kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace)
+}
+
 func TestApplyBackendTrafficPolicy_SkipsWithoutDynamicClient(t *testing.T) {
 	kube, err := NewTestKubernetesClient(testNamespace1, newTestBackendAPI(nil))
 	require.NoError(t, err)
 
-	err = kube.applyBackendTrafficPolicy(context.Background(), btpRoute("r1", map[string]string{
+	err = applyPolicyFromRoute(kube, context.Background(), btpRoute("r1", map[string]string{
 		entity.AnnotationProxyReadTimeout: "60",
 	}), testNamespace1)
 	assert.NoError(t, err)
@@ -83,7 +91,7 @@ func TestApplyBackendTrafficPolicy_CreateUpdateDelete(t *testing.T) {
 		entity.AnnotationProxyReadTimeout: "1800",
 	})
 
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
 
 	created, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-btp", metav1.GetOptions{})
 	require.NoError(t, err)
@@ -94,7 +102,7 @@ func TestApplyBackendTrafficPolicy_CreateUpdateDelete(t *testing.T) {
 	assert.Equal(t, "1800s", timeout)
 
 	route.Metadata.Annotations[entity.AnnotationProxyReadTimeout] = "900"
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
 	updated, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-btp", metav1.GetOptions{})
 	require.NoError(t, err)
 	timeout, _, err = unstructured.NestedString(updated.Object, "spec", "timeout", "http", "streamIdleTimeout")
@@ -111,7 +119,7 @@ func TestApplyBackendTrafficPolicy_UsesDefaultIdleTimeout(t *testing.T) {
 	kube := newKubeWithDynamic(t, dyn, "30m")
 	ctx := context.Background()
 
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, btpRoute("route-default", nil), testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, btpRoute("route-default", nil), testNamespace1))
 	created, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-default", metav1.GetOptions{})
 	require.NoError(t, err)
 	timeout, found, err := unstructured.NestedString(created.Object, "spec", "timeout", "http", "streamIdleTimeout")
@@ -127,10 +135,10 @@ func TestApplyBackendTrafficPolicy_DeletesWhenNoLongerNeeded(t *testing.T) {
 	route := btpRoute("route-clear", map[string]string{
 		entity.AnnotationProxyReadTimeout: "60",
 	})
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
 
 	route.Metadata.Annotations = nil
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
 	_, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-clear", metav1.GetOptions{})
 	assert.Error(t, err)
 }
@@ -163,7 +171,7 @@ func TestApplyBackendTrafficPolicy_UpdatesAndDeletesCompanionPolicy(t *testing.T
 
 	route := btpRoute("companion", nil)
 	route.Spec.StreamIdleTimeout = "111s"
-	require.NoError(t, kube.applyBackendTrafficPolicy(ctx, route, testNamespace1))
+	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
 	got, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, entity.ManagedByPaasMediation, got.GetLabels()[entity.ManagedByLabel])
@@ -177,24 +185,24 @@ func TestApplyBackendTrafficPolicy_UpdatesAndDeletesCompanionPolicy(t *testing.T
 	assert.True(t, paasErrors.IsNotFound(err))
 }
 
-func TestApplyBackendTrafficPolicy_InvalidTimeout(t *testing.T) {
+func TestBackendTrafficPolicyFromRoute_InvalidTimeout(t *testing.T) {
 	dyn := newDynamicFake()
 	kube := newKubeWithDynamic(t, dyn, "")
 	route := btpRoute("bad", nil)
 	route.Spec.StreamIdleTimeout = "not-a-duration"
-	err := kube.applyBackendTrafficPolicy(context.Background(), route, testNamespace1)
+	_, err := kube.backendTrafficPolicyFromRoute(route, testNamespace1)
 	assert.Error(t, err)
 	assert.True(t, paasErrors.IsBadRequest(err))
 }
 
-func TestApplyBackendTrafficPolicy_RejectsUnsupportedAnnotations(t *testing.T) {
+func TestBackendTrafficPolicyFromRoute_RejectsUnsupportedAnnotations(t *testing.T) {
 	dyn := newDynamicFake()
 	kube := newKubeWithDynamic(t, dyn, "")
 	route := btpRoute("bad-ann", map[string]string{
 		entity.AnnotationProxyReadTimeout: "60",
 		AnnotationConfigSnippet:           "something",
 	})
-	err := kube.applyBackendTrafficPolicy(context.Background(), route, testNamespace1)
+	_, err := kube.backendTrafficPolicyFromRoute(route, testNamespace1)
 	assert.Error(t, err)
 	assert.True(t, paasErrors.IsInvalid(err))
 }
@@ -225,7 +233,7 @@ func TestApplyBackendTrafficPolicy_CreateIgnorableAbsence(t *testing.T) {
 			schema.GroupResource{Resource: "backendtrafficpolicies"}, "create")
 	})
 	kube := newKubeWithDynamic(t, dyn, "")
-	err := kube.applyBackendTrafficPolicy(context.Background(), btpRoute("route-no-crd", map[string]string{
+	err := applyPolicyFromRoute(kube, context.Background(), btpRoute("route-no-crd", map[string]string{
 		entity.AnnotationProxyReadTimeout: "60",
 	}), testNamespace1)
 	assert.NoError(t, err)

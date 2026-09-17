@@ -511,6 +511,86 @@ func Test_CreateRoute_GatewayAPIOnly_Success(t *testing.T) {
 	assertions.Len(list.Items, 1)
 }
 
+func Test_CreateRoute_GatewayAPIOnly_InvalidTimeout_DoesNotCreateHTTPRoute(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, gwClient := newGatewayAPIOnlyKubeClient(t)
+
+	route := dualModeTestRoute()
+	route.Spec.StreamIdleTimeout = "not-a-duration"
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsBadRequest(err))
+
+	list, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Empty(list.Items)
+}
+
+func Test_CreateRoute_GatewayAPIOnly_UnsupportedAnnotation_DoesNotCreateHTTPRoute(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, gwClient := newGatewayAPIOnlyKubeClient(t)
+
+	route := dualModeTestRoute()
+	route.Metadata.Annotations = map[string]string{AnnotationConfigSnippet: "something"}
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInvalid(err))
+
+	list, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).List(ctx, metav1.ListOptions{})
+	assertions.NoError(err)
+	assertions.Empty(list.Items)
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_InvalidTimeout_LeavesHTTPRouteUnchanged(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, gwClient := newGatewayAPIOnlyKubeClient(t)
+
+	route := dualModeTestRoute()
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	original, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.NoError(err)
+
+	route.Spec.Host = "changed.example.com"
+	route.Spec.StreamIdleTimeout = "not-a-duration"
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsBadRequest(err))
+
+	got, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.NoError(err)
+	assertions.Equal(original.Spec.Hostnames, got.Spec.Hostnames)
+	assertions.Equal(original.ResourceVersion, got.ResourceVersion)
+}
+
+func Test_UpdateOrCreateRoute_GatewayAPIOnly_UnsupportedAnnotation_LeavesHTTPRouteUnchanged(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	kubeClient, gwClient := newGatewayAPIOnlyKubeClient(t)
+
+	route := dualModeTestRoute()
+	_, err := kubeClient.CreateRoute(ctx, route, testNamespace1)
+	assertions.NoError(err)
+
+	original, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.NoError(err)
+
+	route.Spec.Host = "changed.example.com"
+	route.Metadata.Annotations = map[string]string{AnnotationConfigSnippet: "something"}
+	_, err = kubeClient.UpdateOrCreateRoute(ctx, route, testNamespace1)
+	assertions.Error(err)
+	assertions.True(paasErrors.IsInvalid(err))
+
+	got, err := gwClient.GatewayV1().HTTPRoutes(testNamespace1).Get(ctx, testIngress, metav1.GetOptions{})
+	assertions.NoError(err)
+	assertions.Equal(original.Spec.Hostnames, got.Spec.Hostnames)
+	assertions.Equal(original.ResourceVersion, got.ResourceVersion)
+}
+
 func Test_UpdateOrCreateRoute_GatewayAPIOnly_UpdatesHTTPRoute(t *testing.T) {
 	assertions := require.New(t)
 	ctx := context.Background()
@@ -1412,6 +1492,38 @@ func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteNotFound_ReturnsNotFound(t *testin
 	kubeClient, _ := newGatewayAPIOnlyKubeClient(t)
 
 	err := kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.True(paasErrors.IsNotFound(err))
+}
+
+func Test_DeleteRoute_GatewayAPIOnly_HTTPRouteNotFound_DeletesBackendTrafficPolicy(t *testing.T) {
+	assertions := require.New(t)
+	ctx := context.Background()
+	gwClient := gatewayclientfake.NewSimpleClientset()
+	dyn := newDynamicFake()
+	kubeClient, err := NewKubernetesClientBuilder().
+		WithNamespace(testNamespace1).
+		WithClient(&backend.KubernetesApi{
+			KubernetesInterface:  fake.NewClientset(),
+			CertmanagerInterface: &certClient.Clientset{},
+			GatewayInterface:     gwClient,
+			DynamicInterface:     dyn,
+		}).
+		WithGatewaySystemType(GatewayApiDefault).
+		Build()
+	assertions.NoError(err)
+
+	route := dualModeTestRoute()
+	route.Spec.StreamIdleTimeout = "60s"
+	policy, err := kubeClient.backendTrafficPolicyFromRoute(route, testNamespace1)
+	assertions.NoError(err)
+	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).
+		Create(ctx, policy, metav1.CreateOptions{})
+	assertions.NoError(err)
+
+	err = kubeClient.DeleteRoute(ctx, testIngress, testNamespace1)
+	assertions.True(paasErrors.IsNotFound(err))
+	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).
+		Get(ctx, testIngress, metav1.GetOptions{})
 	assertions.True(paasErrors.IsNotFound(err))
 }
 

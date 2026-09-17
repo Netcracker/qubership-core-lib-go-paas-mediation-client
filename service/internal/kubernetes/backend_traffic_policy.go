@@ -74,39 +74,34 @@ func (kube *Kubernetes) backendTrafficPolicyFromRoute(route *entity.Route, names
 	return policy, nil
 }
 
-func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, route *entity.Route, namespace string) error {
-	client := kube.backendTrafficPolicyClientOrSkip(ctx, namespace, route.Name)
+func (kube *Kubernetes) applyBackendTrafficPolicy(ctx context.Context, policy *unstructured.Unstructured, name, namespace string) error {
+	client := kube.backendTrafficPolicyClientOrSkip(ctx, namespace, name)
 	if client == nil {
 		return nil
 	}
-
-	policy, err := kube.backendTrafficPolicyFromRoute(route, namespace)
-	if err != nil {
-		return err
-	}
 	if policy == nil {
-		return kube.deleteBackendTrafficPolicy(ctx, route.Name, namespace)
+		return kube.deleteBackendTrafficPolicy(ctx, name, namespace)
 	}
 
-	existing, getErr := client.Get(ctx, route.Name, metav1.GetOptions{})
+	existing, getErr := client.Get(ctx, name, metav1.GetOptions{})
 	if getErr != nil {
 		if paasErrors.IsNotFound(getErr) || isIgnorablePolicyAbsence(getErr) {
 			_, createErr := client.Create(ctx, policy, metav1.CreateOptions{})
 			if createErr != nil {
-				return skipOrWrapPolicyError(ctx, "create", route.Name, createErr)
+				return skipOrWrapPolicyError(ctx, "create", name, createErr)
 			}
-			logger.InfoC(ctx, "BackendTrafficPolicy created: %s", route.Name)
+			logger.InfoC(ctx, "BackendTrafficPolicy created: %s", name)
 			return nil
 		}
-		return fmt.Errorf("failed to get BackendTrafficPolicy %s: %w", route.Name, getErr)
+		return fmt.Errorf("failed to get BackendTrafficPolicy %s: %w", name, getErr)
 	}
 
 	policy.SetResourceVersion(existing.GetResourceVersion())
 	_, updateErr := client.Update(ctx, policy, metav1.UpdateOptions{})
 	if updateErr != nil {
-		return skipOrWrapPolicyError(ctx, "update", route.Name, updateErr)
+		return skipOrWrapPolicyError(ctx, "update", name, updateErr)
 	}
-	logger.InfoC(ctx, "BackendTrafficPolicy updated: %s", route.Name)
+	logger.InfoC(ctx, "BackendTrafficPolicy updated: %s", name)
 	return nil
 }
 
