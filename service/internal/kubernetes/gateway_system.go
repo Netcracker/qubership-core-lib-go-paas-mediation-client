@@ -12,9 +12,10 @@ const (
 	DefaultGatewaySystemNamespace = "gateway-system"
 	DefaultGatewaySystemName      = "default-external-gateway"
 
-	GatewaySystemTypeProperty      = "gateway.system.type"
-	GatewaySystemNamespaceProperty = "gateway.system.namespace"
-	GatewaySystemNameProperty      = "gateway.system.name"
+	GatewaySystemTypeProperty           = "gateway.system.type"
+	GatewaySystemNamespaceProperty      = "gateway.system.namespace"
+	GatewaySystemNameProperty           = "gateway.system.name"
+	HTTPRouteRequestIdleTimeoutProperty = "http.route.request.idle.timeout"
 )
 
 type GatewaySystem struct {

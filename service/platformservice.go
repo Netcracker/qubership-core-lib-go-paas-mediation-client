@@ -25,6 +25,7 @@ import (
 	projectv1client "github.com/openshift/client-go/project/clientset/versioned/typed/project/v1"
 	routev1client "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/client-go/dynamic"
 	k8s "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/rest"
@@ -208,6 +209,16 @@ func createPlatformService(builder PlatformClientBuilder) (PlatformService, erro
 		kubeClientBuilder = kubeClientBuilder.WithGatewaySystemName(gatewaySystemName)
 	}
 
+	var httpRouteIdleTimeout string
+	if builder.httpRouteIdleTimeout != nil {
+		httpRouteIdleTimeout = *builder.httpRouteIdleTimeout
+	} else {
+		httpRouteIdleTimeout = configloader.GetOrDefaultString(kubernetes.HTTPRouteRequestIdleTimeoutProperty, "")
+	}
+	if httpRouteIdleTimeout != "" {
+		kubeClientBuilder = kubeClientBuilder.WithHTTPRouteRequestIdleTimeout(httpRouteIdleTimeout)
+	}
+
 	kubeClient, err := kubeClientBuilder.Build()
 
 	if err != nil {
@@ -283,7 +294,16 @@ func initLocalClient() (*backend.KubernetesApi, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient, GatewayInterface: gatewayApiClient}, nil
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return &backend.KubernetesApi{
+		KubernetesInterface:  kubernetesClient,
+		CertmanagerInterface: certmanagerClient,
+		GatewayInterface:     gatewayApiClient,
+		DynamicInterface:     dynamicClient,
+	}, nil
 }
 
 func initInClusterClient() (*backend.KubernetesApi, error) {
@@ -308,7 +328,16 @@ func initInClusterClient() (*backend.KubernetesApi, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &backend.KubernetesApi{KubernetesInterface: kubernetesClient, CertmanagerInterface: certmanagerClient, GatewayInterface: gatewayApiClient}, nil
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return &backend.KubernetesApi{
+		KubernetesInterface:  kubernetesClient,
+		CertmanagerInterface: certmanagerClient,
+		GatewayInterface:     gatewayApiClient,
+		DynamicInterface:     dynamicClient,
+	}, nil
 }
 
 func initCaches(caches map[cache.CacheName]struct{}, numItems int64, maxSizeInBytes int64, maxItemSizeInBytes int64, ttl time.Duration) (*cache.ResourcesCache, error) {
