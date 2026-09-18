@@ -555,6 +555,7 @@ func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
 			PathType: pathType,
 			Path:     path,
 			Host:     host,
+			Filters:  httpRoute.Spec.Rules[0].Filters,
 		}
 	}
 
