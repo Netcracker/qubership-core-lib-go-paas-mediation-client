@@ -45,6 +45,45 @@ func (kube *Kubernetes) backendTrafficPolicyClient(namespace string) dynamic.Res
 	return dyn.Resource(backendTrafficPolicyGVR).Namespace(namespace)
 }
 
+func (kube *Kubernetes) getBackendTrafficPolicy(ctx context.Context, name, namespace string) *unstructured.Unstructured {
+	client := kube.backendTrafficPolicyClient(namespace)
+	if client == nil {
+		return nil
+	}
+	policy, err := client.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if !isIgnorablePolicyAbsence(err) {
+			logger.WarnC(ctx, "Failed to get BackendTrafficPolicy %s while reading route: %v", name, err)
+		}
+		return nil
+	}
+	return policy
+}
+
+func (kube *Kubernetes) listBackendTrafficPoliciesByName(ctx context.Context, namespace string) map[string]*unstructured.Unstructured {
+	client := kube.backendTrafficPolicyClient(namespace)
+	if client == nil {
+		return nil
+	}
+	list, err := client.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		if !isIgnorablePolicyAbsence(err) {
+			logger.WarnC(ctx, "Failed to list BackendTrafficPolicies in %s while reading routes: %v", namespace, err)
+		}
+		return nil
+	}
+	out := make(map[string]*unstructured.Unstructured, len(list.Items))
+	for i := range list.Items {
+		item := &list.Items[i]
+		out[item.GetName()] = item
+	}
+	return out
+}
+
+func (kube *Kubernetes) enrichRouteFromBackendTrafficPolicy(ctx context.Context, route *entity.Route, name, namespace string) {
+	entity.ApplyManagedBackendTrafficPolicy(route, kube.getBackendTrafficPolicy(ctx, name, namespace))
+}
+
 func (kube *Kubernetes) backendTrafficPolicyClientOrSkip(ctx context.Context, namespace, name string) dynamic.ResourceInterface {
 	client := kube.backendTrafficPolicyClient(namespace)
 	if client == nil {
