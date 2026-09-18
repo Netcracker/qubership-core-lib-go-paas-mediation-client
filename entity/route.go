@@ -562,3 +562,23 @@ func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
 	metadata := *FromObjectMeta("Route", &httpRoute.ObjectMeta)
 	return &Route{Spec: routeSpec, Metadata: metadata}
 }
+
+func ApplyManagedBackendTrafficPolicy(route *Route, policy *unstructured.Unstructured) {
+	if route == nil || policy == nil {
+		return
+	}
+	if policy.GetLabels()[ManagedByLabel] != ManagedByPaasMediation {
+		return
+	}
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	if err == nil && found && timeout != "" {
+		route.Spec.StreamIdleTimeout = timeout
+	}
+	useClientProtocol, found, err := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
+	if err == nil && found && useClientProtocol {
+		if route.Metadata.Annotations == nil {
+			route.Metadata.Annotations = make(map[string]string)
+		}
+		route.Metadata.Annotations[AnnotationBackendProtocol] = "GRPC"
+	}
+}
