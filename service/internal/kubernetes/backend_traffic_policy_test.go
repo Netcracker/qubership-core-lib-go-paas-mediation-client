@@ -6,6 +6,7 @@ import (
 
 	certClient "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/entity"
+	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/filter"
 	"github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8/service/backend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -252,4 +253,87 @@ func TestIsIgnorablePolicyAbsence(t *testing.T) {
 	assert.True(t, isIgnorablePolicyAbsence(&meta.NoKindMatchError{GroupKind: schema.GroupKind{Kind: "BackendTrafficPolicy"}}))
 	assert.True(t, isIgnorablePolicyAbsence(&meta.NoResourceMatchError{PartialResource: schema.GroupVersionResource{Resource: "backendtrafficpolicies"}}))
 	assert.False(t, isIgnorablePolicyAbsence(assert.AnError))
+}
+
+func TestRouteRoundTrip_RestoresTimeoutAndGrpcFromManagedPolicy(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "30m")
+	ctx := context.Background()
+
+	route := btpRoute("route-roundtrip", map[string]string{
+		entity.AnnotationBackendProtocol: "GRPC",
+	})
+	route.Spec.StreamIdleTimeout = "3600s"
+	route.Spec.Path = "/"
+	route.Spec.PathType = "Prefix"
+	route.Spec.Port = entity.RoutePort{TargetPort: 8080}
+
+	created, err := kube.CreateRoute(ctx, route, testNamespace1)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	assert.Equal(t, "3600s", created.Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", created.Metadata.Annotations[entity.AnnotationBackendProtocol])
+
+	got, err := kube.GetRoute(ctx, "route-roundtrip", testNamespace1)
+	require.NoError(t, err)
+	assert.Equal(t, "3600s", got.Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", got.Metadata.Annotations[entity.AnnotationBackendProtocol])
+
+	listed, err := kube.GetRouteList(ctx, testNamespace1, filter.Meta{})
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.Equal(t, "3600s", listed[0].Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", listed[0].Metadata.Annotations[entity.AnnotationBackendProtocol])
+
+	updated, err := kube.UpdateOrCreateRoute(ctx, got, testNamespace1)
+	require.NoError(t, err)
+	assert.Equal(t, "3600s", updated.Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", updated.Metadata.Annotations[entity.AnnotationBackendProtocol])
+
+	policy, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-roundtrip", metav1.GetOptions{})
+	require.NoError(t, err)
+	timeout, found, err := unstructured.NestedString(policy.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "3600s", timeout)
+	useClient, found, err := unstructured.NestedBool(policy.Object, "spec", "useClientProtocol")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.True(t, useClient)
+}
+
+func TestGetRoute_DoesNotRestoreUnmanagedPolicy(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "")
+	ctx := context.Background()
+
+	_, err := kube.CreateRoute(ctx, btpRoute("companion-get", nil), testNamespace1)
+	require.NoError(t, err)
+
+	existing := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.envoyproxy.io/v1alpha1",
+		"kind":       "BackendTrafficPolicy",
+		"metadata": map[string]interface{}{
+			"name":      "companion-get",
+			"namespace": testNamespace1,
+			"labels": map[string]interface{}{
+				"app.kubernetes.io/managed-by": "saasDeployer",
+			},
+		},
+		"spec": map[string]interface{}{
+			"useClientProtocol": true,
+			"timeout": map[string]interface{}{
+				"http": map[string]interface{}{
+					"streamIdleTimeout": "1800s",
+				},
+			},
+		},
+	}}
+	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Create(ctx, existing, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	got, err := kube.GetRoute(ctx, "companion-get", testNamespace1)
+	require.NoError(t, err)
+	assert.Empty(t, got.Spec.StreamIdleTimeout)
+	assert.NotEqual(t, "GRPC", got.Metadata.Annotations[entity.AnnotationBackendProtocol])
 }

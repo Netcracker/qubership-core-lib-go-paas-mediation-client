@@ -288,6 +288,7 @@ func (kube *Kubernetes) upsertHTTPRoute(ctx context.Context, route *entity.Route
 	}
 
 	routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
+	entity.ApplyManagedBackendTrafficPolicy(routeFromHTTPRoute, policy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
 		if _, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity); err != nil {
@@ -389,7 +390,9 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 			return nil, fmt.Errorf("HTTPRoute %s has nil underlying object in namespace %s", resourceName, namespace)
 		}
 
-		return entity.RouteFromHTTPRoute(httpRoute.HTTPRoute), nil
+		route := entity.RouteFromHTTPRoute(httpRoute.HTTPRoute)
+		kube.enrichRouteFromBackendTrafficPolicy(ctx, route, resourceName, namespace)
+		return route, nil
 	}
 	if kube.UseNetworkingV1Ingress {
 		return GetWrapper(ctx, resourceName, namespace, kube.getNetworkingV1Client().Ingresses(namespace).Get,
@@ -522,11 +525,13 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
+		policies := kube.listBackendTrafficPoliciesByName(ctx, namespace)
 		return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, nil,
 			func(listObj *gatewayv1.HTTPRouteList) (result []entity.Route) {
 				for _, item := range listObj.Items {
 					route := entity.RouteFromHTTPRoute(&item)
 					if route != nil {
+						entity.ApplyManagedBackendTrafficPolicy(route, policies[route.Metadata.Name])
 						result = append(result, *route)
 					}
 				}
@@ -720,6 +725,7 @@ func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route
 	}
 
 	routeFromHTTPRoute := entity.RouteFromHTTPRoute(createdHTTPRoute)
+	entity.ApplyManagedBackendTrafficPolicy(routeFromHTTPRoute, policy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(createdHTTPRoute)
 		_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)

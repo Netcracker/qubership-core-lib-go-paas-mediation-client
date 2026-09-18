@@ -951,6 +951,61 @@ func TestRouteFromHTTPRoute_EmptyRules(t *testing.T) {
 	assert.Equal(t, int32(0), route.Spec.Port.TargetPort)
 }
 
+func TestApplyManagedBackendTrafficPolicy_RestoresTimeoutAndGrpc(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	route.Metadata.Annotations[AnnotationBackendProtocol] = "GRPC"
+	route.Spec.StreamIdleTimeout = "3600s"
+
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+	converted := RouteFromHTTPRoute(httpRoute)
+	assert.Empty(t, converted.Spec.StreamIdleTimeout)
+	assert.NotEqual(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
+
+	policy, err := route.ToBackendTrafficPolicy("")
+	assert.NoError(t, err)
+	assert.NotNil(t, policy)
+
+	ApplyManagedBackendTrafficPolicy(converted, policy)
+	assert.Equal(t, "3600s", converted.Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
+}
+
+func TestApplyManagedBackendTrafficPolicy_IgnoresUnmanaged(t *testing.T) {
+	route := createSimpleRoute("Prefix", int32(testPort))
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+	converted := RouteFromHTTPRoute(httpRoute)
+
+	policy := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": BackendTrafficPolicyAPIVersion,
+		"kind":       BackendTrafficPolicyKind,
+		"metadata": map[string]interface{}{
+			"name": testName,
+			"labels": map[string]interface{}{
+				ManagedByLabel: "saasDeployer",
+			},
+		},
+		"spec": map[string]interface{}{
+			"useClientProtocol": true,
+			"timeout": map[string]interface{}{
+				"http": map[string]interface{}{
+					"streamIdleTimeout": "1800s",
+				},
+			},
+		},
+	}}
+
+	ApplyManagedBackendTrafficPolicy(converted, policy)
+	assert.Empty(t, converted.Spec.StreamIdleTimeout)
+	assert.NotEqual(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
+}
+
+func TestApplyManagedBackendTrafficPolicy_NilSafe(t *testing.T) {
+	ApplyManagedBackendTrafficPolicy(nil, nil)
+	route := createSimpleRoute("Prefix", int32(testPort))
+	ApplyManagedBackendTrafficPolicy(route, nil)
+	assert.Empty(t, route.Spec.StreamIdleTimeout)
+}
+
 func TestBuildSessionPersistence(t *testing.T) {
 	annotations := map[string]string{
 		AnnotationAffinity:            "cookie",
