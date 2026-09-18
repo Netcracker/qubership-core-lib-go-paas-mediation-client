@@ -531,6 +531,9 @@ func TestToHTTPRoute_WithCustomFilters(t *testing.T) {
 	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
 	assert.Equal(t, 1, len(httpRoute.Spec.Rules[0].Filters))
 	assert.Equal(t, gatewayv1.HTTPRouteFilterResponseHeaderModifier, httpRoute.Spec.Rules[0].Filters[0].Type)
+
+	convertedRoute := RouteFromHTTPRoute(httpRoute)
+	assert.Equal(t, route.Spec.Filters, convertedRoute.Spec.Filters)
 }
 
 func TestToBackendTrafficPolicy_GrpcWithoutTimeout(t *testing.T) {
