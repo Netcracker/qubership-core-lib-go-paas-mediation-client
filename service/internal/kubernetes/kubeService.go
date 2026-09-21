@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,18 +50,19 @@ func init() {
 }
 
 type Kubernetes struct {
-	initCacheOnce          sync.Once
-	client                 *backend.KubernetesApi
-	WatchExecutor          pmWatch.Executor
-	WatchHandlers          *SharedWatchHandlers
-	namespace              string
-	Cache                  *cache.ResourcesCache
-	CacheAdapters          *CacheAdapters
-	BadResources           *BadResources // todo remove it in the nex major release
-	UseNetworkingV1Ingress bool          // todo remove it in the nex major release if we don't support k8s 1.22 anymore
-	RolloutExecutor        exec.RolloutExecutor
-	BG2Enabled             func() bool
-	GatewaySystem          GatewaySystem
+	initCacheOnce               sync.Once
+	client                      *backend.KubernetesApi
+	WatchExecutor               pmWatch.Executor
+	WatchHandlers               *SharedWatchHandlers
+	namespace                   string
+	Cache                       *cache.ResourcesCache
+	CacheAdapters               *CacheAdapters
+	BadResources                *BadResources // todo remove it in the nex major release
+	UseNetworkingV1Ingress      bool          // todo remove it in the nex major release if we don't support k8s 1.22 anymore
+	RolloutExecutor             exec.RolloutExecutor
+	BG2Enabled                  func() bool
+	GatewaySystem               GatewaySystem
+	HTTPRouteRequestIdleTimeout string
 }
 
 // todo delete this in next major release!
@@ -124,15 +126,16 @@ func (r *BadRoutes) ToSliceMap() (result map[string][]string) {
 }
 
 type KubernetesClientBuilder struct {
-	namespace          string
-	client             *backend.KubernetesApi
-	watchExecutor      pmWatch.Executor
-	watchClientTimeout time.Duration
-	cache              *cache.ResourcesCache
-	badResources       *BadResources
-	rolloutExecutor    exec.RolloutExecutor
-	bg2Enabled         func() bool
-	gatewaySystem      GatewaySystem
+	namespace                   string
+	client                      *backend.KubernetesApi
+	watchExecutor               pmWatch.Executor
+	watchClientTimeout          time.Duration
+	cache                       *cache.ResourcesCache
+	badResources                *BadResources
+	rolloutExecutor             exec.RolloutExecutor
+	bg2Enabled                  func() bool
+	gatewaySystem               GatewaySystem
+	httpRouteRequestIdleTimeout string
 }
 
 func NewKubernetesClientBuilder() *KubernetesClientBuilder {
@@ -194,6 +197,11 @@ func (b *KubernetesClientBuilder) WithGatewaySystemName(name string) *Kubernetes
 	return b
 }
 
+func (b *KubernetesClientBuilder) WithHTTPRouteRequestIdleTimeout(timeout string) *KubernetesClientBuilder {
+	b.httpRouteRequestIdleTimeout = strings.TrimSpace(timeout)
+	return b
+}
+
 func (b *KubernetesClientBuilder) applyDefaults() {
 	if b.watchExecutor == nil {
 		b.watchExecutor = &DefaultWatchExecutor{}
@@ -217,6 +225,17 @@ func (b *KubernetesClientBuilder) applyDefaults() {
 	if b.gatewaySystem.Name == "" {
 		b.gatewaySystem.Name = DefaultGatewaySystemName
 	}
+}
+
+func (b *KubernetesClientBuilder) validateHTTPRouteRequestIdleTimeout() error {
+	if b.httpRouteRequestIdleTimeout == "" {
+		return nil
+	}
+	if !entity.IsValidGatewayAPIDuration(b.httpRouteRequestIdleTimeout) {
+		return fmt.Errorf("%s value %q is not a valid Gateway API duration, expected pattern like 1800s or 30m",
+			HTTPRouteRequestIdleTimeoutProperty, b.httpRouteRequestIdleTimeout)
+	}
+	return nil
 }
 
 func (b *KubernetesClientBuilder) needsGatewayRoutesWatchers() bool {
@@ -251,7 +270,9 @@ func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers 
 	authClient := b.client.KubernetesInterface
 
 	if hasKindGatewayApi("HTTPRoute", kubeDiscovery) {
-		if err := b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", handlers.WithHTTPRouteV1); err != nil {
+		if err := b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", func(executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface) {
+			handlers.WithHTTPRouteV1(executor, clientTimeout, restClient, (&Kubernetes{client: b.client}).routeFromWatchedHTTPRoute)
+		}); err != nil {
 			return err
 		}
 	}
@@ -306,6 +327,9 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
 	b.applyDefaults()
+	if err := b.validateHTTPRouteRequestIdleTimeout(); err != nil {
+		return nil, err
+	}
 
 	version, err := b.client.KubernetesInterface.Discovery().ServerVersion()
 	if err != nil {
@@ -334,18 +358,19 @@ func (b *KubernetesClientBuilder) Build() (*Kubernetes, error) {
 	}
 
 	return &Kubernetes{
-		initCacheOnce:          sync.Once{},
-		client:                 b.client,
-		WatchExecutor:          b.watchExecutor,
-		WatchHandlers:          watchEventHandlers,
-		namespace:              b.namespace,
-		Cache:                  b.cache,
-		CacheAdapters:          cacheAdapters,
-		BadResources:           b.badResources,
-		UseNetworkingV1Ingress: useNetworkingV1Ingress,
-		RolloutExecutor:        b.rolloutExecutor,
-		BG2Enabled:             b.bg2Enabled,
-		GatewaySystem:          b.gatewaySystem,
+		initCacheOnce:               sync.Once{},
+		client:                      b.client,
+		WatchExecutor:               b.watchExecutor,
+		WatchHandlers:               watchEventHandlers,
+		namespace:                   b.namespace,
+		Cache:                       b.cache,
+		CacheAdapters:               cacheAdapters,
+		BadResources:                b.badResources,
+		UseNetworkingV1Ingress:      useNetworkingV1Ingress,
+		RolloutExecutor:             b.rolloutExecutor,
+		BG2Enabled:                  b.bg2Enabled,
+		GatewaySystem:               b.gatewaySystem,
+		HTTPRouteRequestIdleTimeout: b.httpRouteRequestIdleTimeout,
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	appsv1client "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	projectv1client "github.com/openshift/client-go/project/clientset/versioned/typed/project/v1"
 	routev1client "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	"k8s.io/client-go/dynamic"
 	k8s "k8s.io/client-go/kubernetes"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
@@ -19,6 +20,7 @@ type KubernetesApi struct {
 	KubernetesInterface
 	CertmanagerInterface
 	GatewayInterface
+	DynamicInterface dynamic.Interface
 }
 
 type OpenshiftApi struct {
