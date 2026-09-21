@@ -24,3 +24,4 @@
 
 ### Requires
 - RBAC: `get/list/watch/create/update/patch/delete` on `gateway.envoyproxy.io/backendtrafficpolicies` (same as existing `HTTPRoute` permissions).
+- Envoy Gateway v1.8.0+ — for `BackendTrafficPolicy` v1alpha1 fields used here (`useClientProtocol`, `timeout.http.streamIdleTimeout`, `mergeType: StrategicMerge`).
