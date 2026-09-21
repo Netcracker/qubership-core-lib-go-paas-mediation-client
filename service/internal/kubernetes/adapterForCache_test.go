@@ -48,7 +48,9 @@ func TestCacheAdapters(t *testing.T) {
 			cert_client.CertmanagerV1().RESTClient(),
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient())
-		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
+		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient(), func(httpRoute *gatewayv1.HTTPRoute) *entity.Route {
+			return entity.RouteFromHTTPRoute(httpRoute, nil)
+		})
 		watchHandlers.WithGRPCRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
 		resourcesCache := cache.NewTestResourcesCache(cacheType)
 		cacheAdapters, err := NewCacheAdapters(ctx, testNamespace1, resourcesCache, watchHandlers)

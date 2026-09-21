@@ -270,7 +270,9 @@ func (b *KubernetesClientBuilder) enrichWatchHandlersWithGatewayRoutes(handlers 
 	authClient := b.client.KubernetesInterface
 
 	if hasKindGatewayApi("HTTPRoute", kubeDiscovery) {
-		if err := b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", handlers.WithHTTPRouteV1); err != nil {
+		if err := b.registerGatewayRouteWatchHandler(authClient, "HTTPRoute", "httproutes", func(executor pmWatch.Executor, clientTimeout time.Duration, restClient rest.Interface) {
+			handlers.WithHTTPRouteV1(executor, clientTimeout, restClient, (&Kubernetes{client: b.client}).routeFromWatchedHTTPRoute)
+		}); err != nil {
 			return err
 		}
 	}
