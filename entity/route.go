@@ -515,7 +515,11 @@ func resolveStreamIdleTimeout(route *Route, defaultIdleTimeout string) (string, 
 	return idleTimeout, nil
 }
 
-func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute, policy *unstructured.Unstructured) *Route {
+func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
+	return RouteFromHTTPRouteWithPolicy(httpRoute, nil)
+}
+
+func RouteFromHTTPRouteWithPolicy(httpRoute *gatewayv1.HTTPRoute, policy *unstructured.Unstructured) *Route {
 	logger.Debugf("Processing RouteFromHTTPRoute, httpRoute: %s", httpRoute.Name)
 
 	var routeSpec RouteSpec

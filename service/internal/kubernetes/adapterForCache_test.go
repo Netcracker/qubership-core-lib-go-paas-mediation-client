@@ -50,7 +50,7 @@ func TestCacheAdapters(t *testing.T) {
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient())
 		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient(), func(httpRoute *gatewayapis.HTTPRoute) *entity.Route {
-			return entity.RouteFromHTTPRoute(httpRoute, nil)
+			return entity.RouteFromHTTPRoute(httpRoute)
 		})
 		watchHandlers.WithGRPCRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
 		resourcesCache := cache.NewTestResourcesCache(cacheType)
