@@ -282,13 +282,13 @@ func (kube *Kubernetes) upsertHTTPRoute(ctx context.Context, route *entity.Route
 	}
 	logger.InfoC(ctx, "HTTPRoute updated: %s", route.Name)
 
-	if err := kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace); err != nil {
+	storedPolicy, err := kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace)
+	if err != nil {
 		logger.ErrorC(ctx, "Error to apply BackendTrafficPolicy for %s: %+v", route.Name, err)
 		return routeResourceResult{err: err}
 	}
 
-	routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute)
-	entity.ApplyManagedBackendTrafficPolicy(routeFromHTTPRoute, policy)
+	routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute, storedPolicy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
 		if _, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity); err != nil {
@@ -374,6 +374,26 @@ func (kube *Kubernetes) upsertExtensionsV1Ingress(ctx context.Context, route *en
 	return routeResourceResult{route: routeFromIngress, status: routeStatusUpdated}
 }
 
+func (kube *Kubernetes) routeFromHTTPRoute(ctx context.Context, httpRoute *gatewayv1.HTTPRoute, name, namespace string) (*entity.Route, error) {
+	policy, err := kube.getBackendTrafficPolicy(ctx, name, namespace)
+	if err != nil {
+		return nil, err
+	}
+	return entity.RouteFromHTTPRoute(httpRoute, policy), nil
+}
+
+func (kube *Kubernetes) routeFromWatchedHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *entity.Route {
+	if httpRoute == nil {
+		return nil
+	}
+	policy, err := kube.getBackendTrafficPolicy(context.Background(), httpRoute.Name, httpRoute.Namespace)
+	if err != nil {
+		logger.ErrorC(context.Background(), "Failed to get BackendTrafficPolicy %s while watching route: %v", httpRoute.Name, err)
+		return entity.RouteFromHTTPRoute(httpRoute, nil)
+	}
+	return entity.RouteFromHTTPRoute(httpRoute, policy)
+}
+
 func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, namespace string) (*entity.Route, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
 		httpRoute, err := GetWrapper(ctx, resourceName, namespace, kube.getGatewayV1Client().HTTPRoutes(namespace).Get,
@@ -390,9 +410,7 @@ func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, names
 			return nil, fmt.Errorf("HTTPRoute %s has nil underlying object in namespace %s", resourceName, namespace)
 		}
 
-		route := entity.RouteFromHTTPRoute(httpRoute.HTTPRoute)
-		kube.enrichRouteFromBackendTrafficPolicy(ctx, route, resourceName, namespace)
-		return route, nil
+		return kube.routeFromHTTPRoute(ctx, httpRoute.HTTPRoute, resourceName, namespace)
 	}
 	if kube.UseNetworkingV1Ingress {
 		return GetWrapper(ctx, resourceName, namespace, kube.getNetworkingV1Client().Ingresses(namespace).Get,
@@ -499,7 +517,7 @@ func (kube *Kubernetes) deleteRouteHTTPRoute(ctx context.Context, routeName, nam
 			kube.Cache.HTTPRoute.Delete(ctx, namespace, routeName)
 		}
 	}
-	if delErr := kube.deleteBackendTrafficPolicy(ctx, routeName, namespace); delErr != nil {
+	if _, delErr := kube.deleteBackendTrafficPolicy(ctx, routeName, namespace); delErr != nil {
 		logger.WarnC(ctx, "Failed to delete BackendTrafficPolicy %s: %v", routeName, delErr)
 	}
 	return err
@@ -525,13 +543,15 @@ func (kube *Kubernetes) deleteRouteLegacyIngress(ctx context.Context, routeName,
 
 func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filter filter.Meta) ([]entity.Route, error) {
 	if kube.GatewaySystem.IsGatewayAPIEnabled() {
-		policies := kube.listBackendTrafficPoliciesByName(ctx, namespace)
+		policies, err := kube.listBackendTrafficPoliciesByName(ctx, namespace)
+		if err != nil {
+			return nil, err
+		}
 		return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, nil,
 			func(listObj *gatewayv1.HTTPRouteList) (result []entity.Route) {
 				for _, item := range listObj.Items {
-					route := entity.RouteFromHTTPRoute(&item)
+					route := entity.RouteFromHTTPRoute(&item, policies[item.Name])
 					if route != nil {
-						entity.ApplyManagedBackendTrafficPolicy(route, policies[route.Metadata.Name])
 						result = append(result, *route)
 					}
 				}
@@ -719,13 +739,13 @@ func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route
 		return nil, err
 	}
 
-	if err := kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace); err != nil {
+	storedPolicy, err := kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace)
+	if err != nil {
 		logger.ErrorC(ctx, "Error to apply BackendTrafficPolicy for %s: %+v", route.Name, err)
 		return nil, err
 	}
 
-	routeFromHTTPRoute := entity.RouteFromHTTPRoute(createdHTTPRoute)
-	entity.ApplyManagedBackendTrafficPolicy(routeFromHTTPRoute, policy)
+	routeFromHTTPRoute := entity.RouteFromHTTPRoute(createdHTTPRoute, storedPolicy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(createdHTTPRoute)
 		_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)

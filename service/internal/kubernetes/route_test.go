@@ -362,7 +362,7 @@ func Test_GetRoute_DualMode_IgnoresIngress(t *testing.T) {
 	route, err := kubeClient.GetRoute(ctx, testIngress, testNamespace1)
 	assertions.NoError(err)
 	assertions.NotNil(route)
-	expected := entity.RouteFromHTTPRoute(httpRoute)
+	expected := entity.RouteFromHTTPRoute(httpRoute, nil)
 	assertions.Equal(expected.Spec.Host, route.Spec.Host)
 	assertions.NotEqual("legacy-only.example.com", route.Spec.Host)
 }

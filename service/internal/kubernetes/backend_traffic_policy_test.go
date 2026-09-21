@@ -71,7 +71,8 @@ func applyPolicyFromRoute(kube *Kubernetes, ctx context.Context, route *entity.R
 	if err != nil {
 		return err
 	}
-	return kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace)
+	_, err = kube.applyBackendTrafficPolicy(ctx, policy, route.Name, namespace)
+	return err
 }
 
 func TestApplyBackendTrafficPolicy_SkipsWithoutDynamicClient(t *testing.T) {
@@ -110,7 +111,8 @@ func TestApplyBackendTrafficPolicy_CreateUpdateDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "900s", timeout)
 
-	require.NoError(t, kube.deleteBackendTrafficPolicy(ctx, "route-btp", testNamespace1))
+	_, err = kube.deleteBackendTrafficPolicy(ctx, "route-btp", testNamespace1)
+	require.NoError(t, err)
 	_, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "route-btp", metav1.GetOptions{})
 	assert.True(t, err != nil)
 }
@@ -172,16 +174,29 @@ func TestApplyBackendTrafficPolicy_DoesNotUpdateOrDeleteUnmanagedPolicy(t *testi
 
 	route := btpRoute("companion", nil)
 	route.Spec.StreamIdleTimeout = "111s"
-	require.NoError(t, applyPolicyFromRoute(kube, ctx, route, testNamespace1))
-	got, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
+	policy, err := kube.backendTrafficPolicyFromRoute(route, testNamespace1)
 	require.NoError(t, err)
-	assert.Equal(t, "saasDeployer", got.GetLabels()[entity.ManagedByLabel])
-	timeout, found, err := unstructured.NestedString(got.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	stored, err := kube.applyBackendTrafficPolicy(ctx, policy, route.Name, testNamespace1)
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	assert.Equal(t, "saasDeployer", stored.GetLabels()[entity.ManagedByLabel])
+	timeout, found, err := unstructured.NestedString(stored.Object, "spec", "timeout", "http", "streamIdleTimeout")
 	require.NoError(t, err)
 	assert.True(t, found)
 	assert.Equal(t, "1800s", timeout)
 
-	require.NoError(t, kube.deleteBackendTrafficPolicy(ctx, "companion", testNamespace1))
+	got, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "saasDeployer", got.GetLabels()[entity.ManagedByLabel])
+	timeout, found, err = unstructured.NestedString(got.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "1800s", timeout)
+
+	skipped, err := kube.deleteBackendTrafficPolicy(ctx, "companion", testNamespace1)
+	require.NoError(t, err)
+	require.NotNil(t, skipped)
+	assert.Equal(t, "saasDeployer", skipped.GetLabels()[entity.ManagedByLabel])
 	got, err = dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion", metav1.GetOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, "saasDeployer", got.GetLabels()[entity.ManagedByLabel])
@@ -244,7 +259,8 @@ func TestApplyBackendTrafficPolicy_CreateIgnorableAbsence(t *testing.T) {
 func TestDeleteBackendTrafficPolicy_SkipsWithoutDynamic(t *testing.T) {
 	kube, err := NewTestKubernetesClient(testNamespace1, newTestBackendAPI(nil))
 	require.NoError(t, err)
-	assert.NoError(t, kube.deleteBackendTrafficPolicy(context.Background(), "missing", testNamespace1))
+	_, err = kube.deleteBackendTrafficPolicy(context.Background(), "missing", testNamespace1)
+	assert.NoError(t, err)
 }
 
 func TestIsIgnorablePolicyAbsence(t *testing.T) {
@@ -302,6 +318,54 @@ func TestRouteRoundTrip_RestoresTimeoutAndGrpcFromManagedPolicy(t *testing.T) {
 	assert.True(t, useClient)
 }
 
+func TestCreateRoute_DoesNotReportSkippedUnmanagedPolicy(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "")
+	ctx := context.Background()
+
+	existing := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.envoyproxy.io/v1alpha1",
+		"kind":       "BackendTrafficPolicy",
+		"metadata": map[string]interface{}{
+			"name":      "companion-create",
+			"namespace": testNamespace1,
+			"labels": map[string]interface{}{
+				"app.kubernetes.io/managed-by": "saasDeployer",
+			},
+		},
+		"spec": map[string]interface{}{
+			"timeout": map[string]interface{}{
+				"http": map[string]interface{}{
+					"streamIdleTimeout": "1800s",
+				},
+			},
+		},
+	}}
+	_, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Create(ctx, existing, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	route := btpRoute("companion-create", nil)
+	route.Spec.StreamIdleTimeout = "111s"
+	created, err := kube.CreateRoute(ctx, route, testNamespace1)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	assert.Empty(t, created.Spec.StreamIdleTimeout)
+
+	updated := btpRoute("companion-create", nil)
+	updated.Spec.StreamIdleTimeout = "222s"
+	got, err := kube.UpdateOrCreateRoute(ctx, updated, testNamespace1)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Empty(t, got.Spec.StreamIdleTimeout)
+
+	stored, err := dyn.Resource(backendTrafficPolicyGVR).Namespace(testNamespace1).Get(ctx, "companion-create", metav1.GetOptions{})
+	require.NoError(t, err)
+	timeout, found, err := unstructured.NestedString(stored.Object, "spec", "timeout", "http", "streamIdleTimeout")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "1800s", timeout)
+}
+
 func TestGetRoute_DoesNotRestoreUnmanagedPolicy(t *testing.T) {
 	dyn := newDynamicFake()
 	kube := newKubeWithDynamic(t, dyn, "")
@@ -336,4 +400,62 @@ func TestGetRoute_DoesNotRestoreUnmanagedPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.Spec.StreamIdleTimeout)
 	assert.NotEqual(t, "GRPC", got.Metadata.Annotations[entity.AnnotationBackendProtocol])
+}
+
+func TestRouteFromWatchedHTTPRoute_RestoresManagedPolicy(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "30m")
+	ctx := context.Background()
+
+	route := btpRoute("watch-route", map[string]string{
+		entity.AnnotationBackendProtocol: "GRPC",
+	})
+	route.Spec.StreamIdleTimeout = "3600s"
+	created, err := kube.CreateRoute(ctx, route, testNamespace1)
+	require.NoError(t, err)
+
+	httpRoute, err := kube.getGatewayV1Client().HTTPRoutes(testNamespace1).Get(ctx, created.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	got := kube.routeFromWatchedHTTPRoute(httpRoute)
+	require.NotNil(t, got)
+	assert.Equal(t, "3600s", got.Spec.StreamIdleTimeout)
+	assert.Equal(t, "GRPC", got.Metadata.Annotations[entity.AnnotationBackendProtocol])
+	assert.Nil(t, kube.routeFromWatchedHTTPRoute(nil))
+}
+
+func TestGetRoute_PropagatesBackendTrafficPolicyGetError(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "")
+	ctx := context.Background()
+
+	_, err := kube.CreateRoute(ctx, btpRoute("route-get-err", nil), testNamespace1)
+	require.NoError(t, err)
+
+	dyn.PrependReactor("get", "backendtrafficpolicies", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, assert.AnError
+	})
+
+	got, err := kube.GetRoute(ctx, "route-get-err", testNamespace1)
+	assert.Error(t, err)
+	assert.Nil(t, got)
+	assert.ErrorContains(t, err, "failed to get BackendTrafficPolicy")
+}
+
+func TestGetRouteList_PropagatesBackendTrafficPolicyListError(t *testing.T) {
+	dyn := newDynamicFake()
+	kube := newKubeWithDynamic(t, dyn, "")
+	ctx := context.Background()
+
+	_, err := kube.CreateRoute(ctx, btpRoute("route-list-err", nil), testNamespace1)
+	require.NoError(t, err)
+
+	dyn.PrependReactor("list", "backendtrafficpolicies", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, assert.AnError
+	})
+
+	got, err := kube.GetRouteList(ctx, testNamespace1, filter.Meta{})
+	assert.Error(t, err)
+	assert.Nil(t, got)
+	assert.ErrorContains(t, err, "failed to list BackendTrafficPolicies")
 }

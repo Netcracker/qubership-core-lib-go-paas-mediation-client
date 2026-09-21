@@ -131,7 +131,7 @@ func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache(),
 	}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 
 	watchHandler, err := kubeClient.WatchRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.NoError(err)
@@ -282,7 +282,7 @@ func TestWatchGatewayHTTPRoutesAddedEvent(t *testing.T) {
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache()}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 	watchHandler, err := kubeClient.WatchGatewayHTTPRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.Nil(err)
 	verifyWatchHandler(r, func() {
@@ -370,7 +370,7 @@ func TestWatchGatewayHTTPRoutesDeletedEvent(t *testing.T) {
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache()}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 	watchHandler, err := kubeClient.WatchGatewayHTTPRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.Nil(err)
 	verifyWatchHandler(r, func() {

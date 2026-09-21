@@ -515,7 +515,7 @@ func resolveStreamIdleTimeout(route *Route, defaultIdleTimeout string) (string, 
 	return idleTimeout, nil
 }
 
-func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
+func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute, policy *unstructured.Unstructured) *Route {
 	logger.Debugf("Processing RouteFromHTTPRoute, httpRoute: %s", httpRoute.Name)
 
 	var routeSpec RouteSpec
@@ -560,10 +560,12 @@ func RouteFromHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *Route {
 	}
 
 	metadata := *FromObjectMeta("Route", &httpRoute.ObjectMeta)
-	return &Route{Spec: routeSpec, Metadata: metadata}
+	route := &Route{Spec: routeSpec, Metadata: metadata}
+	applyManagedBackendTrafficPolicy(route, policy)
+	return route
 }
 
-func ApplyManagedBackendTrafficPolicy(route *Route, policy *unstructured.Unstructured) {
+func applyManagedBackendTrafficPolicy(route *Route, policy *unstructured.Unstructured) {
 	if route == nil || policy == nil {
 		return
 	}
