@@ -16,7 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	fakeWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	gatewayv1 "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
+	gatewayapis "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 func TestCacheAdapters(t *testing.T) {
@@ -42,13 +43,13 @@ func TestCacheAdapters(t *testing.T) {
 
 		clientset := &kubernetes.Clientset{}
 		cert_client := &certClient.Clientset{}
-		gatewayClient := &gatewayv1.GatewayV1Client{}
+		gatewayClient := &gatewayclient.GatewayV1Client{}
 		watchHandlers := NewSharedWatchEventHandlers(watchExecutor, watchTimeout,
 			clientset.CoreV1().RESTClient(),
 			cert_client.CertmanagerV1().RESTClient(),
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient())
-		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient(), func(httpRoute *gatewayv1.HTTPRoute) *entity.Route {
+		watchHandlers.WithHTTPRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient(), func(httpRoute *gatewayapis.HTTPRoute) *entity.Route {
 			return entity.RouteFromHTTPRoute(httpRoute, nil)
 		})
 		watchHandlers.WithGRPCRouteV1(watchExecutor, watchTimeout, gatewayClient.RESTClient())
