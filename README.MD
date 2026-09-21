@@ -32,6 +32,105 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
 
 ---
 
+> ## Gateway API HTTPRoute Timeouts
+>
+> When `GATEWAY_SYSTEM_TYPE` contains `gateway-api-default`, the library automatically creates 
+> [Envoy Gateway BackendTrafficPolicy](https://gateway.envoyproxy.io/docs/api/extension_types/#backendtrafficpolicy) 
+> resources alongside HTTPRoutes to configure idle timeouts and GRPC backend protocol.
+>
+> **Timeout priority (highest first):**
+> 1. `spec.streamIdleTimeout` (`Route.Spec.StreamIdleTimeout`) — explicit per-route Gateway API duration (`"1800s"`, `"30m"`, `"1h30m"`)
+> 2. `HTTP_ROUTE_REQUEST_IDLE_TIMEOUT` / property `http.route.request.idle.timeout` (service/platform default)
+> 3. Legacy nginx annotations: `max(proxy-read-timeout, proxy-send-timeout)` (values in seconds, converted to `streamIdleTimeout`)
+>
+> `streamIdleTimeout` is a **spec field**, not an annotation. A metadata annotation named `streamIdleTimeout` is copied onto the HTTPRoute and **ignored** by this library and by Envoy Gateway. `HTTP_ROUTE_REQUEST_IDLE_TIMEOUT` is a service-level property, not a per-request annotation.
+>
+> **REST body (paas-mediation create/update route) — correct:**
+> ```json
+> {
+>   "metadata": {
+>     "name": "example",
+>     "annotations": {
+>       "argocd.argoproj.io/tracking-id": "..."
+>     }
+>   },
+>   "spec": {
+>     "host": "example.com",
+>     "pathType": "Prefix",
+>     "path": "/",
+>     "to": { "name": "example" },
+>     "port": { "targetPort": 8080 },
+>     "streamIdleTimeout": "668s"
+>   }
+> }
+> ```
+> Result: BackendTrafficPolicy with `spec.timeout.http.streamIdleTimeout: 668s`. Nginx timeout annotations may be present; they are ignored when `spec.streamIdleTimeout` is set.
+>
+> **Wrong — timeout in annotations (BTP is not created from this):**
+> ```json
+> {
+>   "metadata": {
+>     "name": "example",
+>     "annotations": {
+>       "streamIdleTimeout": "668s"
+>     }
+>   },
+>   "spec": {
+>     "host": "example.com",
+>     "path": "/",
+>     "to": { "name": "example" },
+>     "port": { "targetPort": 8080 }
+>   }
+> }
+> ```
+> Result: HTTPRoute is created; `streamIdleTimeout` stays as a useless annotation. No BackendTrafficPolicy unless a platform default or nginx `proxy-read-timeout` / `proxy-send-timeout` is set.
+>
+> **When BackendTrafficPolicy is created:** if a timeout is resolved from the priority list above, or the route has `nginx.ingress.kubernetes.io/backend-protocol: GRPC`. If none of these apply, HTTPRoute is still created and BTP is skipped.
+>
+> **Go usage example:**
+> ```go
+> route := &entity.Route{
+>     Spec: entity.RouteSpec{
+>         Host: "example.com",
+>         StreamIdleTimeout: "1800s",  // spec field — takes precedence over nginx annotations
+>         // For filters (headers, redirects, CORS), use Filters field:
+>         // Filters: []gatewayv1.HTTPRouteFilter{...},
+>     },
+> }
+> client.CreateRoute(ctx, route, namespace)
+> ```
+>
+> **RBAC (required on the service that uses this library):** create/update/delete of HTTPRoute also create/update/delete
+> a companion `BackendTrafficPolicy`. The service ServiceAccount must be allowed to manage
+> `gateway.envoyproxy.io` `backendtrafficpolicies` (same verbs as for HTTPRoute writes):
+>
+> ```yaml
+> - apiGroups:
+>     - gateway.envoyproxy.io
+>   verbs:
+>     - get
+>     - list
+>     - watch
+>     - create
+>     - update
+>     - patch
+>     - delete
+>   resources:
+>     - backendtrafficpolicies
+> ```
+>
+> Without these permissions HTTPRoute may still be created, but BackendTrafficPolicy apply is skipped or fails.
+>
+> **Notes:**
+> - Duration must include a unit (`s`, `m`, `h`, `ms`). `"668"` without a suffix is invalid.
+> - `proxy-connect-timeout` is ignored (gateway defaults are sufficient)
+> - Do NOT use HTTPRoute `spec.timeouts.request` (kills streaming requests)
+> - BackendTrafficPolicy is Envoy Gateway alpha API (v1alpha1)
+> - Requires Envoy Gateway v1.8.0+. Older versions may not support `useClientProtocol` / `mergeType: StrategicMerge` on `BackendTrafficPolicy`.
+> - See the platform Gateway API Migration guide (section on custom timeouts) for full details.
+
+---
+
 <!-- TOC -->
       * [Supported operations:](#supported-operations)
       * [Usage:](#usage)
@@ -75,7 +174,8 @@ service.NewPlatformClientBuilder().WithBasicCaches().Build()
 
 #### Create client with all types of basic caches and [Gateway API](https://gateway-api.sigs.k8s.io/) route caches ([HTTPRoute](https://gateway-api.sigs.k8s.io/reference/spec/#httproute), [GRPCRoute](https://gateway-api.sigs.k8s.io/reference/spec/#grpcroute)) enabled
 
-> Ensure you have sufficient permissions to operate (`get`, `list`, `watch`) with `gateway.networking.k8s.io/v1` entities (`HTTPRoute`, `GRPCRoute`). 
+> Ensure you have sufficient permissions to operate (`get`, `list`, `watch`) with `gateway.networking.k8s.io/v1` entities (`HTTPRoute`, `GRPCRoute`).
+> For HTTPRoute create/update/delete, also grant `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` on `gateway.envoyproxy.io` `backendtrafficpolicies`. 
 
 ```
 service.NewPlatformClientBuilder().WithBasicCaches().WithGatewayApiRoutesCaches.Build()
