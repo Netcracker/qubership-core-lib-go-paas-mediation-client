@@ -532,7 +532,7 @@ func TestToHTTPRoute_WithCustomFilters(t *testing.T) {
 	assert.Equal(t, 1, len(httpRoute.Spec.Rules[0].Filters))
 	assert.Equal(t, gatewayv1.HTTPRouteFilterResponseHeaderModifier, httpRoute.Spec.Rules[0].Filters[0].Type)
 
-	convertedRoute := RouteFromHTTPRoute(httpRoute)
+	convertedRoute := RouteFromHTTPRoute(httpRoute, nil)
 	assert.Equal(t, route.Spec.Filters, convertedRoute.Spec.Filters)
 }
 
@@ -922,7 +922,7 @@ func TestRouteFromHTTPRoute(t *testing.T) {
 		},
 	}
 
-	route := RouteFromHTTPRoute(httpRoute)
+	route := RouteFromHTTPRoute(httpRoute, nil)
 
 	assert.Equal(t, testName, route.Metadata.Name)
 	assert.Equal(t, testNamespace, route.Metadata.Namespace)
@@ -942,7 +942,7 @@ func TestRouteFromHTTPRoute_EmptyRules(t *testing.T) {
 		Spec: gatewayv1.HTTPRouteSpec{},
 	}
 
-	route := RouteFromHTTPRoute(httpRoute)
+	route := RouteFromHTTPRoute(httpRoute, nil)
 
 	assert.Equal(t, testName, route.Metadata.Name)
 	assert.Equal(t, "", route.Spec.Host)
@@ -951,13 +951,13 @@ func TestRouteFromHTTPRoute_EmptyRules(t *testing.T) {
 	assert.Equal(t, int32(0), route.Spec.Port.TargetPort)
 }
 
-func TestApplyManagedBackendTrafficPolicy_RestoresTimeoutAndGrpc(t *testing.T) {
+func TestRouteFromHTTPRoute_RestoresTimeoutAndGrpcFromManagedPolicy(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	route.Metadata.Annotations[AnnotationBackendProtocol] = "GRPC"
 	route.Spec.StreamIdleTimeout = "3600s"
 
 	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
-	converted := RouteFromHTTPRoute(httpRoute)
+	converted := RouteFromHTTPRoute(httpRoute, nil)
 	assert.Empty(t, converted.Spec.StreamIdleTimeout)
 	assert.NotEqual(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
 
@@ -965,15 +965,14 @@ func TestApplyManagedBackendTrafficPolicy_RestoresTimeoutAndGrpc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, policy)
 
-	ApplyManagedBackendTrafficPolicy(converted, policy)
+	converted = RouteFromHTTPRoute(httpRoute, policy)
 	assert.Equal(t, "3600s", converted.Spec.StreamIdleTimeout)
 	assert.Equal(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
 }
 
-func TestApplyManagedBackendTrafficPolicy_IgnoresUnmanaged(t *testing.T) {
+func TestRouteFromHTTPRoute_IgnoresUnmanagedPolicy(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
 	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
-	converted := RouteFromHTTPRoute(httpRoute)
 
 	policy := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": BackendTrafficPolicyAPIVersion,
@@ -994,16 +993,16 @@ func TestApplyManagedBackendTrafficPolicy_IgnoresUnmanaged(t *testing.T) {
 		},
 	}}
 
-	ApplyManagedBackendTrafficPolicy(converted, policy)
+	converted := RouteFromHTTPRoute(httpRoute, policy)
 	assert.Empty(t, converted.Spec.StreamIdleTimeout)
 	assert.NotEqual(t, "GRPC", converted.Metadata.Annotations[AnnotationBackendProtocol])
 }
 
-func TestApplyManagedBackendTrafficPolicy_NilSafe(t *testing.T) {
-	ApplyManagedBackendTrafficPolicy(nil, nil)
+func TestRouteFromHTTPRoute_NilPolicy(t *testing.T) {
 	route := createSimpleRoute("Prefix", int32(testPort))
-	ApplyManagedBackendTrafficPolicy(route, nil)
-	assert.Empty(t, route.Spec.StreamIdleTimeout)
+	httpRoute := route.ToHTTPRoute("gateway-system", "default-external-gateway")
+	converted := RouteFromHTTPRoute(httpRoute, nil)
+	assert.Empty(t, converted.Spec.StreamIdleTimeout)
 }
 
 func TestBuildSessionPersistence(t *testing.T) {
