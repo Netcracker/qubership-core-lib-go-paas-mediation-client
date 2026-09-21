@@ -288,7 +288,7 @@ func (kube *Kubernetes) upsertHTTPRoute(ctx context.Context, route *entity.Route
 		return routeResourceResult{err: err}
 	}
 
-	routeFromHTTPRoute := entity.RouteFromHTTPRoute(updatedHTTPRoute, storedPolicy)
+	routeFromHTTPRoute := entity.RouteFromHTTPRouteWithPolicy(updatedHTTPRoute, storedPolicy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(updatedHTTPRoute)
 		if _, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity); err != nil {
@@ -379,7 +379,7 @@ func (kube *Kubernetes) routeFromHTTPRoute(ctx context.Context, httpRoute *gatew
 	if err != nil {
 		return nil, err
 	}
-	return entity.RouteFromHTTPRoute(httpRoute, policy), nil
+	return entity.RouteFromHTTPRouteWithPolicy(httpRoute, policy), nil
 }
 
 func (kube *Kubernetes) routeFromWatchedHTTPRoute(httpRoute *gatewayv1.HTTPRoute) *entity.Route {
@@ -389,9 +389,9 @@ func (kube *Kubernetes) routeFromWatchedHTTPRoute(httpRoute *gatewayv1.HTTPRoute
 	policy, err := kube.getBackendTrafficPolicy(context.Background(), httpRoute.Name, httpRoute.Namespace)
 	if err != nil {
 		logger.ErrorC(context.Background(), "Failed to get BackendTrafficPolicy %s while watching route: %v", httpRoute.Name, err)
-		return entity.RouteFromHTTPRoute(httpRoute, nil)
+		return entity.RouteFromHTTPRoute(httpRoute)
 	}
-	return entity.RouteFromHTTPRoute(httpRoute, policy)
+	return entity.RouteFromHTTPRouteWithPolicy(httpRoute, policy)
 }
 
 func (kube *Kubernetes) GetRoute(ctx context.Context, resourceName string, namespace string) (*entity.Route, error) {
@@ -550,7 +550,7 @@ func (kube *Kubernetes) GetRouteList(ctx context.Context, namespace string, filt
 		return ListWrapper(ctx, filter, kube.getGatewayV1Client().HTTPRoutes(namespace).List, nil,
 			func(listObj *gatewayv1.HTTPRouteList) (result []entity.Route) {
 				for _, item := range listObj.Items {
-					route := entity.RouteFromHTTPRoute(&item, policies[item.Name])
+					route := entity.RouteFromHTTPRouteWithPolicy(&item, policies[item.Name])
 					if route != nil {
 						result = append(result, *route)
 					}
@@ -745,7 +745,7 @@ func (kube *Kubernetes) createHTTPRoute(ctx context.Context, route *entity.Route
 		return nil, err
 	}
 
-	routeFromHTTPRoute := entity.RouteFromHTTPRoute(createdHTTPRoute, storedPolicy)
+	routeFromHTTPRoute := entity.RouteFromHTTPRouteWithPolicy(createdHTTPRoute, storedPolicy)
 	if kube.Cache.HTTPRoute != nil && routeFromHTTPRoute != nil {
 		httpRouteEntity := entity.WrapHTTPRoute(createdHTTPRoute)
 		_, err := kube.Cache.HTTPRoute.Set(ctx, *httpRouteEntity)
