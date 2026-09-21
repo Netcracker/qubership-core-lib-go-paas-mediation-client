@@ -126,6 +126,7 @@ Golang implementation of paas agnostic access to the resources of Openshift/Kube
 > - `proxy-connect-timeout` is ignored (gateway defaults are sufficient)
 > - Do NOT use HTTPRoute `spec.timeouts.request` (kills streaming requests)
 > - BackendTrafficPolicy is Envoy Gateway alpha API (v1alpha1)
+> - Requires Envoy Gateway v1.8.0+. Older versions may not support `useClientProtocol` / `mergeType: StrategicMerge` on `BackendTrafficPolicy`.
 > - See the platform Gateway API Migration guide (section on custom timeouts) for full details.
 
 ---
