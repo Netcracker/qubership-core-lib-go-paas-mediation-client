@@ -131,7 +131,7 @@ func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache(),
 	}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 
 	watchHandler, err := kubeClient.WatchRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.NoError(err)
@@ -142,7 +142,7 @@ func testWatchRoutesUsesHTTPRoute(t *testing.T, gatewaySystemType string) {
 		go fakeWatchExecutor.fakeWatcher.Add(httpRoute)
 		for watchEvent := range watchHandler.Channel {
 			r.Equal("ADDED", watchEvent.Type)
-			expected := entity.RouteFromHTTPRoute(httpRoute)
+			expected := kubeClient.routeFromWatchedHTTPRoute(httpRoute)
 			r.True(So(watchEvent.Object, ShouldResemble, expected))
 			break
 		}
@@ -282,7 +282,7 @@ func TestWatchGatewayHTTPRoutesAddedEvent(t *testing.T) {
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache()}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 	watchHandler, err := kubeClient.WatchGatewayHTTPRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.Nil(err)
 	verifyWatchHandler(r, func() {
@@ -370,7 +370,7 @@ func TestWatchGatewayHTTPRoutesDeletedEvent(t *testing.T) {
 			clientset.NetworkingV1().RESTClient(),
 			clientset.ExtensionsV1beta1().RESTClient()),
 		Cache: cache.NewTestResourcesCache()}
-	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil)
+	kubeClient.WatchHandlers.WithHTTPRouteV1(fakeWatchExecutor, time.Second, nil, kubeClient.routeFromWatchedHTTPRoute)
 	watchHandler, err := kubeClient.WatchGatewayHTTPRoutes(context.Background(), testNamespace1, filter.Meta{})
 	r.Nil(err)
 	verifyWatchHandler(r, func() {
