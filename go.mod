@@ -7,9 +7,9 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.4.2
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.7.0
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.8.0
-	github.com/netcracker/qubership-core-lib-go/v3 v3.14.0
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.7.1
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.9.0
+	github.com/netcracker/qubership-core-lib-go/v3 v3.14.1
 	github.com/openshift/api v0.0.0-20260827203510-c7d4aa14a764
 	github.com/openshift/client-go v0.0.0-20260810202730-ddca5e0b7146
 	github.com/smarty/assertions v1.16.0
@@ -93,7 +93,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
