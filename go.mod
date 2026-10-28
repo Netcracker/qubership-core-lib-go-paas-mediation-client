@@ -10,8 +10,8 @@ require (
 	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.7.4
 	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.10.1
 	github.com/netcracker/qubership-core-lib-go/v3 v3.15.2
-	github.com/openshift/api v0.0.0-20261026215420-da0032bf0c5f
-	github.com/openshift/client-go v0.0.0-20261026144452-41e357d76bc8
+	github.com/openshift/api v0.0.0-20261027123455-77c45d1bcab3
+	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
 	github.com/smarty/assertions v1.16.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
