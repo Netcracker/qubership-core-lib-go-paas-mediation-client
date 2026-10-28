@@ -1,15 +1,15 @@
 module github.com/netcracker/qubership-core-lib-go-paas-mediation-client/v8
 
-go 1.26.7
+go 1.26.9
 
 require (
 	github.com/cert-manager/cert-manager v1.21.3
 	github.com/dgraph-io/ristretto/v2 v2.4.2
 	github.com/fasthttp/websocket v1.5.12
 	github.com/golang/mock v1.6.0
-	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.7.4
-	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.10.1
-	github.com/netcracker/qubership-core-lib-go/v3 v3.15.2
+	github.com/netcracker/qubership-core-lib-go-bg-state-monitor/v2 v2.7.5
+	github.com/netcracker/qubership-core-lib-go-rest-utils/v2 v2.11.0
+	github.com/netcracker/qubership-core-lib-go/v3 v3.15.3
 	github.com/openshift/api v0.0.0-20261027123455-77c45d1bcab3
 	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
 	github.com/smarty/assertions v1.16.0
@@ -53,7 +53,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/consul/api v1.34.5 // indirect
+	github.com/hashicorp/consul/api v1.35.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
@@ -69,7 +69,7 @@ require (
 	github.com/knadh/koanf/parsers/yaml v1.1.1 // indirect
 	github.com/knadh/koanf/providers/env/v2 v2.0.2 // indirect
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
-	github.com/knadh/koanf/v2 v2.3.8 // indirect
+	github.com/knadh/koanf/v2 v2.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
